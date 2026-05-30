@@ -1,8 +1,10 @@
 import { supabase } from "./supabase-client.js";
+import { createRepositories } from "./repositories.js";
 
 const state = {
   currentPage: "home",
   currentUser: null,
+  authReady: !supabase,
   isBusy: false,
   learningItems: [],
   historyItems: [],
@@ -10,8 +12,11 @@ const state = {
   selectedLearningItemId: "",
   selectedHistoryId: "",
   selectedNotebookId: "",
-  reviewItem: null,
-  reviewRevealed: false
+  reviewQueue: [],
+  reviewIndex: 0,
+  reviewRevealed: false,
+  reviewedItems: [],
+  difficultReviewItems: []
 };
 
 const localStoreKeys = {
@@ -65,13 +70,20 @@ const elements = {
   notebookDetailNote: document.querySelector("#notebook-detail-note"),
   newNotebookItem: document.querySelector("#new-notebook-item"),
   deleteNotebookItem: document.querySelector("#delete-notebook-item"),
-  reviewLanguage: document.querySelector("#review-language"),
   reviewCard: document.querySelector("#review-card"),
+  reviewTotalCount: document.querySelector("#review-total-count"),
+  reviewCurrentCount: document.querySelector("#review-current-count"),
   loadReviewCard: document.querySelector("#load-review-card"),
+  reviewAnswerField: document.querySelector("#review-answer-field"),
+  reviewInputLabel: document.querySelector("#review-input-label"),
+  reviewAnswerInput: document.querySelector("#review-answer-input"),
+  reviewAnswerArea: document.querySelector("#review-answer-area"),
   revealReviewAnswer: document.querySelector("#reveal-review-answer"),
-  reviewKnown: document.querySelector("#review-known"),
-  reviewUnsure: document.querySelector("#review-unsure"),
-  reviewNext: document.querySelector("#review-next"),
+  reviewEasy: document.querySelector("#review-easy"),
+  reviewNormal: document.querySelector("#review-normal"),
+  reviewHard: document.querySelector("#review-hard"),
+  reviewForgot: document.querySelector("#review-forgot"),
+  reviewComplete: document.querySelector("#review-complete"),
   authLoggedOut: document.querySelector("#auth-logged-out"),
   authLoggedIn: document.querySelector("#auth-logged-in"),
   authEmail: document.querySelector("#auth-email"),
@@ -87,6 +99,7 @@ const elements = {
 
 function renderAuthPanel(user) {
   state.currentUser = user || null;
+  state.authReady = true;
 
   if (user) {
     elements.authLoggedOut.style.display = "none";
@@ -180,6 +193,7 @@ function initAuth() {
 
   supabase.auth.getSession().then(({ data, error }) => {
     if (error) {
+      state.authReady = true;
       setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
       return;
     }
@@ -188,6 +202,12 @@ function initAuth() {
 
   supabase.auth.onAuthStateChange((_event, session) => {
     renderAuthPanel(session?.user ?? null);
+    if (state.currentPage === "learning-items") {
+      loadLearningItems();
+    }
+    if (state.currentPage === "review") {
+      loadReviewItems();
+    }
   });
 
   elements.authLogin.addEventListener("click", handleLogin);
@@ -317,6 +337,10 @@ function switchPage(pageId) {
     loadNotebook();
   }
 
+  if (pageId === "review") {
+    loadReviewItems();
+  }
+
 }
 
 async function fetchJson(url, options = {}) {
@@ -351,6 +375,9 @@ async function withBusy(task, statusMessage) {
     setStatus(error.message || "処理に失敗しました。");
   } finally {
     setBusy(false);
+    if (state.currentPage === "review") {
+      setReviewControlsVisible(Boolean(currentReviewEntry()));
+    }
   }
 }
 
@@ -549,6 +576,10 @@ async function handleLocalJson(url, options = {}) {
     return localJsonResponse({ item });
   }
 
+  if (path === "/api/srs" && method === "GET") {
+    return localJsonResponse({ items: readLocalCollection(localStoreKeys.srsData) });
+  }
+
   if (path.startsWith("/api/srs/")) {
     const itemId = decodeURIComponent(path.split("/").pop());
     const items = readLocalCollection(localStoreKeys.srsData);
@@ -556,6 +587,12 @@ async function handleLocalJson(url, options = {}) {
 
     if (method === "GET") {
       return localJsonResponse({ item: index === -1 ? null : items[index] });
+    }
+
+    if (method === "PATCH" && index !== -1) {
+      items[index] = sanitizeLocalSrsData({ ...items[index], ...body, itemId }, items[index]);
+      writeLocalCollection(localStoreKeys.srsData, items);
+      return localJsonResponse({ item: items[index] });
     }
 
     if (method === "DELETE" && index !== -1) {
@@ -680,9 +717,23 @@ function learningItemQueryParams() {
   return query ? `?${query}` : "";
 }
 
+function getLearningItemFilters() {
+  const query = learningItemQueryParams();
+  return new URLSearchParams(query ? query.slice(1) : "");
+}
+
+const { learningItemsRepository, srsRepository } = createRepositories({
+  supabase,
+  fetchJson,
+  getCurrentUser: () => state.currentUser,
+  getLearningItemFilters,
+  filterLearningItems,
+  tomorrowIsoDate
+});
+
 async function loadLearningItems() {
   try {
-    const data = await fetchJson(`/api/learning-items${learningItemQueryParams()}`);
+    const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderLearningItemTable();
     setStatus("学習アイテムを読み込みました。");
@@ -762,22 +813,7 @@ function buildLearningItemPayload() {
 }
 
 async function createInitialSrsData(itemId) {
-  await fetchJson("/api/srs", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      itemId,
-      nextReviewDate: tomorrowIsoDate(),
-      interval: 1,
-      easeFactor: 2.5,
-      reviewCount: 0,
-      mistakeCount: 0,
-      lastReviewedAt: "",
-      masteryLevel: 0
-    })
-  });
+  await srsRepository.createInitialSrsData(itemId);
 }
 
 async function saveLearningItem(event) {
@@ -791,13 +827,9 @@ async function saveLearningItem(event) {
 
   const id = elements.learningItemId.value;
   await withBusy(async () => {
-    const data = await fetchJson(id ? `/api/learning-items/${id}` : "/api/learning-items", {
-      method: id ? "PATCH" : "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+    const data = id
+      ? await learningItemsRepository.updateLearningItem(id, payload)
+      : await learningItemsRepository.createLearningItem(payload);
 
     if (!id) {
       await createInitialSrsData(data.item.id);
@@ -811,9 +843,7 @@ async function saveLearningItem(event) {
 
 async function deleteLearningItem(id) {
   await withBusy(async () => {
-    await fetchJson(`/api/learning-items/${id}`, {
-      method: "DELETE"
-    });
+    await learningItemsRepository.deleteLearningItem(id);
     resetLearningItemForm();
     await loadLearningItems();
     setStatus("学習アイテムを削除しました。");
@@ -1054,64 +1084,201 @@ async function deleteHistory(id) {
   }, "履歴を削除しています...");
 }
 
-function renderReviewCard() {
-  const item = state.reviewItem;
+function currentReviewEntry() {
+  return state.reviewQueue[state.reviewIndex] || null;
+}
 
-  if (!item) {
+function reviewPromptForItem(item) {
+  if (item.type === "vocabulary") {
+    return {
+      prompt: item.title || "",
+      inputLabel: "意味を入力してください"
+    };
+  }
+
+  if (item.type === "grammar") {
+    return {
+      prompt: item.title || "",
+      inputLabel: "文法の意味・使い方を入力してください"
+    };
+  }
+
+  if (item.type === "sentence") {
+    return {
+      prompt: item.meaning || item.exampleTranslation || item.title || "",
+      inputLabel: "対応する文を入力してください"
+    };
+  }
+
+  return {
+    prompt: item.content || item.example || "音声を聞いて内容を入力してください",
+    inputLabel: "聞き取った内容、または意味を入力してください"
+  };
+}
+
+function reviewAnswerRows(item) {
+  if (item.type === "vocabulary") {
+    return [
+      ["意味", item.meaning],
+      ["例文", item.example],
+      ["例文訳", item.exampleTranslation],
+      ["メモ", item.note],
+      ["タグ", formatTags(item.tags)]
+    ];
+  }
+
+  if (item.type === "grammar") {
+    return [
+      ["内容", item.content],
+      ["例文", item.example],
+      ["例文訳", item.exampleTranslation],
+      ["メモ", item.note],
+      ["タグ", formatTags(item.tags)]
+    ];
+  }
+
+  return [
+    ["内容", item.content],
+    ["例文", item.example],
+    ["例文訳", item.exampleTranslation],
+    ["メモ", item.note]
+  ];
+}
+
+function renderReviewCounts() {
+  const total = state.reviewQueue.length;
+  elements.reviewTotalCount.textContent = String(total);
+  elements.reviewCurrentCount.textContent = total ? `${Math.min(state.reviewIndex + 1, total)} / ${total}` : "0 / 0";
+}
+
+function setReviewControlsVisible(hasItem) {
+  elements.reviewAnswerField.classList.toggle("hidden", !hasItem);
+  elements.revealReviewAnswer.disabled = !hasItem || state.reviewRevealed;
+  [elements.reviewEasy, elements.reviewNormal, elements.reviewHard, elements.reviewForgot].forEach((button) => {
+    button.disabled = !hasItem || !state.reviewRevealed;
+  });
+}
+
+function renderReviewAnswer(item) {
+  const rows = reviewAnswerRows(item)
+    .filter(([, value]) => value)
+    .map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`)
+    .join("");
+
+  elements.reviewAnswerArea.innerHTML = rows ? `<dl>${rows}</dl>` : "<p>表示できる答えがありません。</p>";
+  elements.reviewAnswerArea.classList.toggle("hidden", !state.reviewRevealed);
+}
+
+function renderReviewComplete() {
+  const difficultItems = state.difficultReviewItems;
+  elements.reviewCard.className = "flashcard empty-state";
+  elements.reviewCard.innerHTML = "<p>今日のSRS復習は完了しました。</p>";
+  elements.reviewAnswerField.classList.add("hidden");
+  elements.reviewAnswerArea.classList.add("hidden");
+  elements.reviewAnswerArea.innerHTML = "";
+  setReviewControlsVisible(false);
+
+  elements.reviewComplete.classList.remove("hidden");
+  elements.reviewComplete.innerHTML = `
+    <h3>復習完了</h3>
+    <p>今回復習した項目数: ${escapeHtml(String(state.reviewedItems.length))}</p>
+    ${
+      difficultItems.length
+        ? `<h4>難しい / 忘れた項目</h4><ul class="mistake-list">${difficultItems
+            .map((entry) => `<li>${escapeHtml(entry.item.title || "")}（${escapeHtml(learningItemTypeLabel(entry.item.type))}）</li>`)
+            .join("")}</ul>`
+        : "<p>難しい項目はありませんでした。</p>"
+    }
+  `;
+  setStatus("今日のSRS復習が完了しました。");
+}
+
+function renderReviewCard() {
+  renderReviewCounts();
+  const entry = currentReviewEntry();
+
+  if (!entry) {
+    elements.reviewComplete.classList.add("hidden");
+    elements.reviewAnswerField.classList.add("hidden");
+    elements.reviewAnswerArea.classList.add("hidden");
     elements.reviewCard.className = "flashcard empty-state";
-    elements.reviewCard.innerHTML = "<p>復習対象の単語が見つかりません。単語帳に語彙を追加してください。</p>";
+    elements.reviewCard.innerHTML = "<p>今日の復習対象はありません。</p>";
+    setReviewControlsVisible(false);
     return;
   }
 
+  const { item, srsData } = entry;
+  const prompt = reviewPromptForItem(item);
+  elements.reviewComplete.classList.add("hidden");
+  elements.reviewInputLabel.textContent = prompt.inputLabel;
+  elements.reviewAnswerInput.value = "";
   elements.reviewCard.className = "flashcard";
   elements.reviewCard.innerHTML = `
-    <div class="term">${escapeHtml(item.term || "")}</div>
-    <p class="meta">${escapeHtml(languageLabel(item.language))} / ${escapeHtml(item.partOfSpeech || "")} / 復習回数 ${escapeHtml(String(item.reviewCount || 0))}</p>
-    ${item.pinyin ? `<p class="meta">${escapeHtml(item.pinyin)}</p>` : ""}
-    <div class="answer ${state.reviewRevealed ? "" : "hidden"}">
-      <p><strong>意味:</strong> ${escapeHtml(item.meaning || "")}</p>
-      <p><strong>例文:</strong> ${escapeHtml(item.example || "")}</p>
-      <p><strong>例文訳:</strong> ${escapeHtml(item.exampleTranslation || "")}</p>
-      <p><strong>現在のステータス:</strong> ${escapeHtml(item.masteryStatus || "")}</p>
-    </div>
+    <div class="term">${escapeHtml(prompt.prompt)}</div>
+    <p class="meta">${escapeHtml(learningItemTypeLabel(item.type))} / ${escapeHtml(languageLabel(item.language))} / 復習回数 ${escapeHtml(String(srsData.reviewCount || 0))}</p>
+    <p class="meta">復習予定日: ${escapeHtml(srsData.nextReviewDate || "")}</p>
   `;
+  renderReviewAnswer(item);
+  setReviewControlsVisible(true);
 }
 
-async function loadReviewCard() {
-  try {
-    const query = elements.reviewLanguage.value
-      ? `?language=${encodeURIComponent(elements.reviewLanguage.value)}`
-      : "";
-    const data = await fetchJson(`/api/review/random${query}`);
-    state.reviewItem = data.item;
+async function loadReviewItems() {
+  await withBusy(async () => {
+    const data = await srsRepository.getDueReviewItems();
+    state.reviewQueue = data.items || [];
+    state.reviewIndex = 0;
     state.reviewRevealed = false;
+    state.reviewedItems = [];
+    state.difficultReviewItems = [];
     renderReviewCard();
-    setStatus(data.item ? "復習カードを読み込みました。" : "復習対象の単語がありません。");
-  } catch (error) {
-    setStatus(error.message || "復習カードの読み込みに失敗しました。");
-  }
+    setStatus(state.reviewQueue.length ? "今日のSRS復習対象を読み込みました。" : "今日の復習対象はありません。");
+  }, "今日のSRS復習対象を読み込んでいます...");
 }
 
-async function submitReview(outcome) {
-  if (!state.reviewItem) {
-    setStatus("先に復習カードを読み込んでください。");
+function revealReviewAnswer() {
+  const entry = currentReviewEntry();
+  if (!entry) {
+    setStatus("今日の復習対象はありません。");
+    return;
+  }
+
+  state.reviewRevealed = true;
+  renderReviewAnswer(entry.item);
+  setReviewControlsVisible(true);
+  setStatus("答えを表示しました。自己評価を選んでください。");
+}
+
+async function submitReview(rating) {
+  const entry = currentReviewEntry();
+  if (!entry) {
+    setStatus("今日の復習対象はありません。");
+    return;
+  }
+
+  if (!state.reviewRevealed) {
+    setStatus("先に答えを表示してください。");
     return;
   }
 
   await withBusy(async () => {
-    const data = await fetchJson(`/api/review/${state.reviewItem.id}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ outcome })
-    });
+    await srsRepository.updateSrsAfterReview(entry.item.id, rating);
+    state.reviewedItems.push(entry);
+    if (rating === "hard" || rating === "forgot") {
+      state.difficultReviewItems.push(entry);
+    }
 
-    state.reviewItem = data.item;
-    state.reviewRevealed = true;
+    state.reviewIndex += 1;
+    state.reviewRevealed = false;
+
+    if (state.reviewIndex >= state.reviewQueue.length) {
+      renderReviewCounts();
+      renderReviewComplete();
+      return;
+    }
+
     renderReviewCard();
-    setStatus("復習結果を更新しました。");
-  }, "復習結果を保存しています...");
+    setStatus("SRS復習結果を保存しました。");
+  }, "SRS復習結果を保存しています...");
 }
 
 elements.navButtons.forEach((button) => {
@@ -1193,18 +1360,20 @@ elements.historyTableBody.addEventListener("click", async (event) => {
   }
 });
 
-elements.loadReviewCard.addEventListener("click", loadReviewCard);
-elements.revealReviewAnswer.addEventListener("click", () => {
-  state.reviewRevealed = true;
-  renderReviewCard();
+elements.loadReviewCard.addEventListener("click", loadReviewItems);
+elements.revealReviewAnswer.addEventListener("click", revealReviewAnswer);
+elements.reviewEasy.addEventListener("click", async () => {
+  await submitReview("easy");
 });
-elements.reviewKnown.addEventListener("click", async () => {
-  await submitReview("known");
+elements.reviewNormal.addEventListener("click", async () => {
+  await submitReview("normal");
 });
-elements.reviewUnsure.addEventListener("click", async () => {
-  await submitReview("unsure");
+elements.reviewHard.addEventListener("click", async () => {
+  await submitReview("hard");
 });
-elements.reviewNext.addEventListener("click", loadReviewCard);
+elements.reviewForgot.addEventListener("click", async () => {
+  await submitReview("forgot");
+});
 
 clearHistoryDetail();
 renderReviewCard();
