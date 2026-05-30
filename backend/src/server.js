@@ -10,6 +10,24 @@ import {
   writeHistory,
   writeVocabularyNotebook
 } from "./storage.js";
+import {
+  createLearningItem,
+  createSrsData,
+  deleteLearningItem,
+  deleteSrsData,
+  getLearningItem,
+  getLearningSession,
+  getSrsData,
+  getStudyLog,
+  listLearningItems,
+  listSrsData,
+  readLearningSessions,
+  readStudyLogs,
+  saveLearningSession,
+  saveStudyLog,
+  updateLearningItem,
+  updateSrsData
+} from "./learningStorage.js";
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
@@ -77,6 +95,132 @@ app.get("/api/health", async (_request, response) => {
   response.json({
     ok: true
   });
+});
+
+app.get("/api/learning-items", async (request, response) => {
+  const { type = "", language = "", tag = "", query = "" } = request.query;
+  const items = await listLearningItems({ type, language, tag, query });
+  response.json({ items });
+});
+
+app.post("/api/learning-items", async (request, response) => {
+  const item = await createLearningItem(request.body);
+  response.status(201).json({ item });
+});
+
+app.get("/api/learning-items/:id", async (request, response) => {
+  const item = await getLearningItem(request.params.id);
+
+  if (!item) {
+    return response.status(404).json({ error: "学習アイテムが見つかりません。" });
+  }
+
+  return response.json({ item });
+});
+
+app.patch("/api/learning-items/:id", async (request, response) => {
+  const item = await updateLearningItem(request.params.id, request.body);
+
+  if (!item) {
+    return response.status(404).json({ error: "学習アイテムが見つかりません。" });
+  }
+
+  return response.json({ item });
+});
+
+app.delete("/api/learning-items/:id", async (request, response) => {
+  const deleted = await deleteLearningItem(request.params.id);
+
+  if (!deleted) {
+    return response.status(404).json({ error: "学習アイテムが見つかりません。" });
+  }
+
+  return response.json({ ok: true });
+});
+
+app.get("/api/srs", async (_request, response) => {
+  const items = await listSrsData();
+  response.json({ items });
+});
+
+app.post("/api/srs", async (request, response) => {
+  const item = await createSrsData(request.body);
+
+  if (!item) {
+    return response.status(400).json({ error: "itemId を指定してください。" });
+  }
+
+  return response.status(201).json({ item });
+});
+
+app.get("/api/srs/:itemId", async (request, response) => {
+  const item = await getSrsData(request.params.itemId);
+
+  if (!item) {
+    return response.status(404).json({ error: "SRSデータが見つかりません。" });
+  }
+
+  return response.json({ item });
+});
+
+app.patch("/api/srs/:itemId", async (request, response) => {
+  const item = await updateSrsData(request.params.itemId, request.body);
+
+  if (!item) {
+    return response.status(404).json({ error: "SRSデータが見つかりません。" });
+  }
+
+  return response.json({ item });
+});
+
+app.delete("/api/srs/:itemId", async (request, response) => {
+  const deleted = await deleteSrsData(request.params.itemId);
+
+  if (!deleted) {
+    return response.status(404).json({ error: "SRSデータが見つかりません。" });
+  }
+
+  return response.json({ ok: true });
+});
+
+app.get("/api/learning-sessions", async (_request, response) => {
+  const items = await readLearningSessions();
+  response.json({ items });
+});
+
+app.post("/api/learning-sessions", async (request, response) => {
+  const item = await saveLearningSession(request.body);
+  response.status(201).json({ item });
+});
+
+app.get("/api/learning-sessions/:id", async (request, response) => {
+  const item = await getLearningSession(request.params.id);
+
+  if (!item) {
+    return response.status(404).json({ error: "学習セッションが見つかりません。" });
+  }
+
+  return response.json({ item });
+});
+
+app.get("/api/study-logs", async (_request, response) => {
+  const items = await readStudyLogs();
+  response.json({ items });
+});
+
+app.post("/api/study-logs", async (request, response) => {
+  const item = await saveStudyLog(request.body);
+  response.status(201).json({ item });
+});
+
+app.get("/api/study-logs/:id", async (request, response) => {
+  const item = await getStudyLog(request.params.id);
+
+  if (!item) {
+    return response.status(404).json({ error: "学習ログが見つかりません。" });
+  }
+
+  return response.json({ item });
 });
 
 app.get("/api/history", async (_request, response) => {

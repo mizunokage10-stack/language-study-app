@@ -6,3 +6,7 @@ dist
 backend/data/history.json
 backend/data/notebook.json
 backend/data/review.json
+backend/data/learning-items.json
+backend/data/srs-data.json
+backend/data/learning-sessions.json
+backend/data/study-logs.json

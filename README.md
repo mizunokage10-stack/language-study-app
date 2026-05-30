@@ -35,10 +35,18 @@ Mac 上でローカル動作する、英語・中国語学習用の Web アプ�
   - Express
   - 学習履歴保存
   - 単語帳保存
+  - 学習アイテム保存
+  - SRS データ保存
+  - 学習セッション保存
+  - 学習ログ保存
   - 復習 API
 - `backend/data`
   - `history.json`
   - `notebook.json`
+  - `learning-items.json`
+  - `srs-data.json`
+  - `learning-sessions.json`
+  - `study-logs.json`
 
 ## 起動方法
 
@@ -97,6 +105,41 @@ PORT=8787
 
 - 学習履歴: `backend/data/history.json`
 - 単語帳: `backend/data/notebook.json`
+- 学習アイテム: `backend/data/learning-items.json`
+- SRS データ: `backend/data/srs-data.json`
+- 学習セッション: `backend/data/learning-sessions.json`
+- 学習ログ: `backend/data/study-logs.json`
+
+## 基礎データ API
+
+### LearningItem
+
+- 一覧: `GET /api/learning-items`
+- 絞り込み: `GET /api/learning-items?type=vocabulary&language=english&tag=basic&query=word`
+- 作成: `POST /api/learning-items`
+- 詳細: `GET /api/learning-items/:id`
+- 更新: `PATCH /api/learning-items/:id`
+- 削除: `DELETE /api/learning-items/:id`
+
+### SrsData
+
+- 一覧: `GET /api/srs`
+- 作成または置き換え: `POST /api/srs`
+- 詳細: `GET /api/srs/:itemId`
+- 更新: `PATCH /api/srs/:itemId`
+- 削除: `DELETE /api/srs/:itemId`
+
+### LearningSession
+
+- 一覧: `GET /api/learning-sessions`
+- 保存: `POST /api/learning-sessions`
+- 詳細: `GET /api/learning-sessions/:id`
+
+### StudyLog
+
+- 一覧: `GET /api/study-logs`
+- 保存: `POST /api/study-logs`
+- 詳細: `GET /api/study-logs/:id`
 
 ## 今後追加しやすい機能
 

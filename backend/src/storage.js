@@ -7,11 +7,11 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
 const dataDir = path.resolve(currentDir, "../data");
 
-function resolveDataPath(fileName) {
+export function resolveDataPath(fileName) {
   return path.resolve(dataDir, fileName);
 }
 
-async function ensureJsonFile(fileName, fallbackValue) {
+export async function ensureJsonFile(fileName, fallbackValue) {
   const filePath = resolveDataPath(fileName);
 
   try {
@@ -21,13 +21,13 @@ async function ensureJsonFile(fileName, fallbackValue) {
   }
 }
 
-async function readJsonFile(fileName, fallbackValue) {
+export async function readJsonFile(fileName, fallbackValue) {
   await ensureJsonFile(fileName, fallbackValue);
   const raw = await fs.readFile(resolveDataPath(fileName), "utf-8");
   return JSON.parse(raw);
 }
 
-async function writeJsonFile(fileName, value) {
+export async function writeJsonFile(fileName, value) {
   await fs.writeFile(resolveDataPath(fileName), JSON.stringify(value, null, 2), "utf-8");
 }
 
