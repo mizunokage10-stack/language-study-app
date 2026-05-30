@@ -17,6 +17,7 @@
 
         <nav class="side-nav">
           <button class="nav-button active" data-page="home" type="button">ホーム</button>
+          <button class="nav-button" data-page="learning-items" type="button">学習アイテム登録</button>
           <button class="nav-button" data-page="notebook" type="button">単語帳</button>
           <button class="nav-button" data-page="review" type="button">復習モード</button>
           <button class="nav-button" data-page="history" type="button">学習履歴</button>
@@ -37,6 +38,10 @@
             </div>
           </div>
           <div class="home-grid">
+            <button class="home-card" data-go="learning-items" type="button">
+              <strong>学習アイテム登録</strong>
+              <span>単語、文法、例文、リスニング文、作文ログを一元管理</span>
+            </button>
             <button class="home-card" data-go="notebook" type="button">
               <strong>単語帳</strong>
               <span>単語、意味、例文、メモ、習得ステータスを管理</span>
@@ -49,6 +54,119 @@
               <strong>学習履歴</strong>
               <span>保存済みの学習記録を確認</span>
             </button>
+          </div>
+        </section>
+
+        <section class="page" id="page-learning-items">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Learning Items</p>
+              <h2>学習アイテム登録</h2>
+            </div>
+          </div>
+          <div class="filter-bar card">
+            <label>
+              種類フィルター
+              <select id="learning-item-type-filter">
+                <option value="">すべて</option>
+                <option value="vocabulary">単語</option>
+                <option value="grammar">文法</option>
+                <option value="sentence">例文</option>
+                <option value="listening">リスニング</option>
+                <option value="writing">作文</option>
+              </select>
+            </label>
+            <label>
+              言語フィルター
+              <select id="learning-item-language-filter">
+                <option value="">すべて</option>
+                <option value="english">英語</option>
+                <option value="chinese">中国語</option>
+                <option value="other">その他</option>
+              </select>
+            </label>
+            <label class="grow">
+              検索
+              <input id="learning-item-query" type="text" placeholder="タイトル、意味、内容、タグで検索" />
+            </label>
+            <button type="button" id="learning-item-search" class="soft-button">検索</button>
+          </div>
+          <div class="two-column wide-right">
+            <section class="card">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>タイトル</th>
+                      <th>種類</th>
+                      <th>言語</th>
+                      <th>タグ</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="learning-item-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card">
+              <h3>新規登録 / 編集</h3>
+              <form id="learning-item-form" class="stack">
+                <input id="learning-item-id" type="hidden" />
+                <div class="field-row">
+                  <label>
+                    種類
+                    <select id="learning-item-type">
+                      <option value="vocabulary">単語</option>
+                      <option value="grammar">文法</option>
+                      <option value="sentence">例文</option>
+                      <option value="listening">リスニング</option>
+                      <option value="writing">作文</option>
+                    </select>
+                  </label>
+                  <label>
+                    言語
+                    <select id="learning-item-language">
+                      <option value="english">英語</option>
+                      <option value="chinese">中国語</option>
+                      <option value="other">その他</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  タイトル
+                  <input id="learning-item-title" type="text" placeholder="単語、文法名、例文タイトルなど" />
+                </label>
+                <label>
+                  意味
+                  <input id="learning-item-meaning" type="text" placeholder="日本語訳や短い意味" />
+                </label>
+                <label>
+                  内容
+                  <textarea id="learning-item-content" rows="5" placeholder="文法説明、リスニング本文、作文ログなど"></textarea>
+                </label>
+                <label>
+                  例文
+                  <textarea id="learning-item-example" rows="3"></textarea>
+                </label>
+                <label>
+                  例文訳
+                  <textarea id="learning-item-example-translation" rows="3"></textarea>
+                </label>
+                <label>
+                  メモ
+                  <textarea id="learning-item-note" rows="3"></textarea>
+                </label>
+                <label>
+                  タグ
+                  <input id="learning-item-tags" type="text" placeholder="基礎, 苦手, 旅行" />
+                </label>
+                <div class="mini-actions">
+                  <button type="submit">登録</button>
+                  <button type="button" id="new-learning-item" class="soft-button">新規入力</button>
+                  <button type="button" id="delete-learning-item" class="soft-button">削除</button>
+                </div>
+              </form>
+            </section>
           </div>
         </section>
 

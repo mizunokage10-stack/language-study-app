@@ -1,8 +1,10 @@
 const state = {
   currentPage: "home",
   isBusy: false,
+  learningItems: [],
   historyItems: [],
   notebookItems: [],
+  selectedLearningItemId: "",
   selectedHistoryId: "",
   selectedNotebookId: "",
   reviewItem: null,
@@ -14,6 +16,24 @@ const elements = {
   navButtons: document.querySelectorAll(".nav-button"),
   pages: document.querySelectorAll(".page"),
   homeButtons: document.querySelectorAll("[data-go]"),
+  learningItemTableBody: document.querySelector("#learning-item-table-body"),
+  learningItemTypeFilter: document.querySelector("#learning-item-type-filter"),
+  learningItemLanguageFilter: document.querySelector("#learning-item-language-filter"),
+  learningItemQuery: document.querySelector("#learning-item-query"),
+  learningItemSearch: document.querySelector("#learning-item-search"),
+  learningItemForm: document.querySelector("#learning-item-form"),
+  learningItemId: document.querySelector("#learning-item-id"),
+  learningItemType: document.querySelector("#learning-item-type"),
+  learningItemLanguage: document.querySelector("#learning-item-language"),
+  learningItemTitle: document.querySelector("#learning-item-title"),
+  learningItemMeaning: document.querySelector("#learning-item-meaning"),
+  learningItemContent: document.querySelector("#learning-item-content"),
+  learningItemExample: document.querySelector("#learning-item-example"),
+  learningItemExampleTranslation: document.querySelector("#learning-item-example-translation"),
+  learningItemNote: document.querySelector("#learning-item-note"),
+  learningItemTags: document.querySelector("#learning-item-tags"),
+  newLearningItem: document.querySelector("#new-learning-item"),
+  deleteLearningItem: document.querySelector("#delete-learning-item"),
   historyTableBody: document.querySelector("#history-table-body"),
   historyDetail: document.querySelector("#history-detail"),
   refreshHistory: document.querySelector("#refresh-history"),
@@ -74,7 +94,25 @@ function formatDate(value) {
 }
 
 function languageLabel(language) {
-  return language === "chinese" ? "中国語" : language === "english" ? "英語" : language;
+  return language === "chinese"
+    ? "中国語"
+    : language === "english"
+      ? "英語"
+      : language === "other"
+        ? "その他"
+        : language;
+}
+
+function learningItemTypeLabel(type) {
+  const labels = {
+    vocabulary: "単語",
+    grammar: "文法",
+    sentence: "例文",
+    listening: "リスニング",
+    writing: "作文"
+  };
+
+  return labels[type] || type;
 }
 
 function modeLabel(mode) {
@@ -99,6 +137,10 @@ function switchPage(pageId) {
 
   if (pageId === "history") {
     loadHistory();
+  }
+
+  if (pageId === "learning-items") {
+    loadLearningItems();
   }
 
   if (pageId === "notebook") {
@@ -135,6 +177,178 @@ async function withBusy(task, statusMessage) {
   } finally {
     setBusy(false);
   }
+}
+
+function parseTags(value) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function formatTags(tags = []) {
+  return Array.isArray(tags) ? tags.join(", ") : "";
+}
+
+function tomorrowIsoDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function learningItemQueryParams() {
+  const params = new URLSearchParams();
+  if (elements.learningItemTypeFilter.value) {
+    params.set("type", elements.learningItemTypeFilter.value);
+  }
+  if (elements.learningItemLanguageFilter.value) {
+    params.set("language", elements.learningItemLanguageFilter.value);
+  }
+  if (elements.learningItemQuery.value.trim()) {
+    params.set("query", elements.learningItemQuery.value.trim());
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+async function loadLearningItems() {
+  try {
+    const data = await fetchJson(`/api/learning-items${learningItemQueryParams()}`);
+    state.learningItems = data.items || [];
+    renderLearningItemTable();
+    setStatus("学習アイテムを読み込みました。");
+  } catch (error) {
+    setStatus(error.message || "学習アイテムの読み込みに失敗しました。");
+  }
+}
+
+function renderLearningItemTable() {
+  if (state.learningItems.length === 0) {
+    elements.learningItemTableBody.innerHTML = `
+      <tr>
+        <td colspan="5">登録された学習アイテムはまだありません。</td>
+      </tr>
+    `;
+    return;
+  }
+
+  elements.learningItemTableBody.innerHTML = state.learningItems
+    .map(
+      (item) => `
+        <tr>
+          <td>
+            <strong>${escapeHtml(item.title || "")}</strong>
+            ${item.meaning ? `<br /><span class="muted">${escapeHtml(item.meaning)}</span>` : ""}
+          </td>
+          <td>${escapeHtml(learningItemTypeLabel(item.type))}</td>
+          <td>${escapeHtml(languageLabel(item.language))}</td>
+          <td>${escapeHtml(formatTags(item.tags))}</td>
+          <td>
+            <div class="table-actions">
+              <button type="button" class="soft-button learning-item-view" data-id="${item.id}">編集</button>
+              <button type="button" class="soft-button learning-item-delete" data-id="${item.id}">削除</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function fillLearningItemForm(item) {
+  state.selectedLearningItemId = item.id;
+  elements.learningItemId.value = item.id;
+  elements.learningItemType.value = item.type || "vocabulary";
+  elements.learningItemLanguage.value = item.language || "english";
+  elements.learningItemTitle.value = item.title || "";
+  elements.learningItemMeaning.value = item.meaning || "";
+  elements.learningItemContent.value = item.content || "";
+  elements.learningItemExample.value = item.example || "";
+  elements.learningItemExampleTranslation.value = item.exampleTranslation || "";
+  elements.learningItemNote.value = item.note || "";
+  elements.learningItemTags.value = formatTags(item.tags);
+}
+
+function resetLearningItemForm() {
+  state.selectedLearningItemId = "";
+  elements.learningItemForm.reset();
+  elements.learningItemId.value = "";
+  elements.learningItemType.value = "vocabulary";
+  elements.learningItemLanguage.value = "english";
+  elements.learningItemTitle.focus();
+}
+
+function buildLearningItemPayload() {
+  return {
+    type: elements.learningItemType.value,
+    language: elements.learningItemLanguage.value,
+    title: elements.learningItemTitle.value.trim(),
+    meaning: elements.learningItemMeaning.value.trim(),
+    content: elements.learningItemContent.value.trim(),
+    example: elements.learningItemExample.value.trim(),
+    exampleTranslation: elements.learningItemExampleTranslation.value.trim(),
+    note: elements.learningItemNote.value.trim(),
+    tags: parseTags(elements.learningItemTags.value)
+  };
+}
+
+async function createInitialSrsData(itemId) {
+  await fetchJson("/api/srs", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      itemId,
+      nextReviewDate: tomorrowIsoDate(),
+      interval: 1,
+      easeFactor: 2.5,
+      reviewCount: 0,
+      mistakeCount: 0,
+      lastReviewedAt: "",
+      masteryLevel: 0
+    })
+  });
+}
+
+async function saveLearningItem(event) {
+  event.preventDefault();
+
+  const payload = buildLearningItemPayload();
+  if (!payload.title) {
+    setStatus("タイトルを入力してください。");
+    return;
+  }
+
+  const id = elements.learningItemId.value;
+  await withBusy(async () => {
+    const data = await fetchJson(id ? `/api/learning-items/${id}` : "/api/learning-items", {
+      method: id ? "PATCH" : "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!id) {
+      await createInitialSrsData(data.item.id);
+    }
+
+    await loadLearningItems();
+    fillLearningItemForm(data.item);
+    setStatus(id ? "学習アイテムを更新しました。" : "学習アイテムと初期SRSデータを登録しました。");
+  }, id ? "学習アイテムを更新しています..." : "学習アイテムを登録しています...");
+}
+
+async function deleteLearningItem(id) {
+  await withBusy(async () => {
+    await fetchJson(`/api/learning-items/${id}`, {
+      method: "DELETE"
+    });
+    resetLearningItemForm();
+    await loadLearningItems();
+    setStatus("学習アイテムを削除しました。");
+  }, "学習アイテムを削除しています...");
 }
 
 function notebookQueryParams() {
@@ -437,6 +651,34 @@ elements.navButtons.forEach((button) => {
 
 elements.homeButtons.forEach((button) => {
   button.addEventListener("click", () => switchPage(button.dataset.go));
+});
+
+elements.learningItemSearch.addEventListener("click", loadLearningItems);
+elements.learningItemForm.addEventListener("submit", saveLearningItem);
+elements.newLearningItem.addEventListener("click", resetLearningItemForm);
+elements.deleteLearningItem.addEventListener("click", async () => {
+  const id = elements.learningItemId.value;
+  if (!id) {
+    setStatus("削除する学習アイテムを一覧から選んでください。");
+    return;
+  }
+
+  await deleteLearningItem(id);
+});
+
+elements.learningItemTableBody.addEventListener("click", async (event) => {
+  const target = event.target;
+
+  if (target.classList.contains("learning-item-view")) {
+    const item = state.learningItems.find((entry) => entry.id === target.dataset.id);
+    if (item) {
+      fillLearningItemForm(item);
+    }
+  }
+
+  if (target.classList.contains("learning-item-delete")) {
+    await deleteLearningItem(target.dataset.id);
+  }
 });
 
 elements.notebookSearch.addEventListener("click", loadNotebook);
