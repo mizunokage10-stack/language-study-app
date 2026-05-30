@@ -78,6 +78,20 @@ Vercel では静的アプリとして配信します。
 外部DBをまだ使わないため、Vercel上のデータは利用中ブラウザの `localStorage` に保存されます。
 端末やブラウザをまたいだ同期は、今後DBを追加する段階で対応します。
 
+### Supabase Auth
+
+ログイン機能には Supabase Auth を使います。
+Vercel の Project Settings で次の環境変数を設定してください。
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
+
+このアプリは Next.js ではないため、Vercel のビルド時に `frontend/supabase-config.js` を生成してブラウザへ公開設定を渡します。
+使用するのは anon public key のみです。`service_role` key は設定しないでください。
+現時点では認証のみを導入しており、学習データの保存先はまだ Supabase DB に移行していません。
+
 ## 使い方
 
 ### ホーム画面

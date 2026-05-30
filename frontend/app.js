@@ -1,5 +1,8 @@
+import { supabase } from "./supabase-client.js";
+
 const state = {
   currentPage: "home",
+  currentUser: null,
   isBusy: false,
   learningItems: [],
   historyItems: [],
@@ -68,8 +71,131 @@ const elements = {
   revealReviewAnswer: document.querySelector("#reveal-review-answer"),
   reviewKnown: document.querySelector("#review-known"),
   reviewUnsure: document.querySelector("#review-unsure"),
-  reviewNext: document.querySelector("#review-next")
+  reviewNext: document.querySelector("#review-next"),
+  authLoggedOut: document.querySelector("#auth-logged-out"),
+  authLoggedIn: document.querySelector("#auth-logged-in"),
+  authEmail: document.querySelector("#auth-email"),
+  authPassword: document.querySelector("#auth-password"),
+  authLogin: document.querySelector("#auth-login"),
+  authSignup: document.querySelector("#auth-signup"),
+  authLogout: document.querySelector("#auth-logout"),
+  authMessage: document.querySelector("#auth-message"),
+  authUserEmail: document.querySelector("#auth-user-email")
 };
+
+// ---- 認証 ---------------------------------------------------------------
+
+function renderAuthPanel(user) {
+  state.currentUser = user || null;
+
+  if (user) {
+    elements.authLoggedOut.style.display = "none";
+    elements.authLoggedIn.style.display = "";
+    elements.authUserEmail.textContent = user.email;
+    elements.authMessage.textContent = "";
+  } else {
+    elements.authLoggedOut.style.display = "";
+    elements.authLoggedIn.style.display = "none";
+    elements.authUserEmail.textContent = "";
+  }
+}
+
+function setAuthMessage(message, isError = false) {
+  elements.authMessage.textContent = message;
+  elements.authMessage.classList.toggle("auth-message--error", isError);
+}
+
+async function handleLogin() {
+  if (!supabase) {
+    setAuthMessage("Supabaseが未設定です。環境変数を確認してください。", true);
+    return;
+  }
+
+  const email = elements.authEmail.value.trim();
+  const password = elements.authPassword.value;
+
+  if (!email || !password) {
+    setAuthMessage("メールアドレスとパスワードを入力してください。", true);
+    return;
+  }
+
+  setAuthMessage("ログイン中...");
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    setAuthMessage(error.message || "ログインに失敗しました。", true);
+  } else {
+    elements.authPassword.value = "";
+    setAuthMessage("");
+  }
+}
+
+async function handleSignup() {
+  if (!supabase) {
+    setAuthMessage("Supabaseが未設定です。環境変数を確認してください。", true);
+    return;
+  }
+
+  const email = elements.authEmail.value.trim();
+  const password = elements.authPassword.value;
+
+  if (!email || !password) {
+    setAuthMessage("メールアドレスとパスワードを入力してください。", true);
+    return;
+  }
+
+  if (password.length < 6) {
+    setAuthMessage("パスワードは6文字以上にしてください。", true);
+    return;
+  }
+
+  setAuthMessage("登録中...");
+  const { error } = await supabase.auth.signUp({ email, password });
+
+  if (error) {
+    setAuthMessage(error.message || "登録に失敗しました。", true);
+  } else {
+    setAuthMessage("確認メールを送信しました。メールを確認してください。");
+    elements.authPassword.value = "";
+  }
+}
+
+async function handleLogout() {
+  if (!supabase) {
+    setAuthMessage("Supabaseが未設定です。環境変数を確認してください。", true);
+    return;
+  }
+
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    setAuthMessage(error.message || "ログアウトに失敗しました。", true);
+  }
+}
+
+function initAuth() {
+  if (!supabase) {
+    setAuthMessage("Supabase未設定です。NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY を設定してください。", true);
+    return;
+  }
+
+  supabase.auth.getSession().then(({ data, error }) => {
+    if (error) {
+      setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
+      return;
+    }
+    renderAuthPanel(data.session?.user ?? null);
+  });
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    renderAuthPanel(session?.user ?? null);
+  });
+
+  elements.authLogin.addEventListener("click", handleLogin);
+  elements.authSignup.addEventListener("click", handleSignup);
+  elements.authLogout.addEventListener("click", handleLogout);
+}
+
+// ---- ここまで認証 --------------------------------------------------------
 
 function setStatus(message) {
   elements.statusText.textContent = message;
@@ -190,6 +316,7 @@ function switchPage(pageId) {
   if (pageId === "notebook") {
     loadNotebook();
   }
+
 }
 
 async function fetchJson(url, options = {}) {
@@ -1082,3 +1209,4 @@ elements.reviewNext.addEventListener("click", loadReviewCard);
 clearHistoryDetail();
 renderReviewCard();
 setStatus("準備完了");
+initAuth();

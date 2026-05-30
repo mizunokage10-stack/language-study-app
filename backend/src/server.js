@@ -41,6 +41,17 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+
+app.get("/supabase-config.js", (_request, response) => {
+  response.type("application/javascript").send(
+    [
+      "window.SUPABASE_URL = " + JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL || "") + ";",
+      "window.SUPABASE_ANON_KEY = " + JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "") + ";",
+      ""
+    ].join("\n")
+  );
+});
+
 app.use(express.static(frontendRoot));
 
 function summarizeTitle(text = "", fallback = "学習記録") {

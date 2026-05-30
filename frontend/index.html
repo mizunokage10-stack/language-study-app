@@ -23,6 +23,32 @@
           <button class="nav-button" data-page="history" type="button">学習履歴</button>
         </nav>
 
+        <section class="auth-panel" id="auth-panel">
+          <div id="auth-logged-out">
+            <h2>ログイン</h2>
+            <div class="stack">
+              <label>
+                メールアドレス
+                <input id="auth-email" type="email" placeholder="example@email.com" autocomplete="email" />
+              </label>
+              <label>
+                パスワード
+                <input id="auth-password" type="password" placeholder="パスワード（6文字以上）" autocomplete="current-password" />
+              </label>
+              <div class="mini-actions">
+                <button type="button" id="auth-login">ログイン</button>
+                <button type="button" id="auth-signup" class="soft-button">新規登録</button>
+              </div>
+              <p id="auth-message" class="auth-message"></p>
+            </div>
+          </div>
+          <div id="auth-logged-in" style="display:none">
+            <h2>アカウント</h2>
+            <p id="auth-user-email" class="muted auth-email-display"></p>
+            <button type="button" id="auth-logout" class="soft-button">ログアウト</button>
+          </div>
+        </section>
+
         <section class="status-panel">
           <h2>状態</h2>
           <p id="status-text">読み込み中...</p>
@@ -348,6 +374,7 @@
       </main>
     </div>
 
+    <script src="/supabase-config.js"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
