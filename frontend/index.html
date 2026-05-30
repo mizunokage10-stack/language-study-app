@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>言語学習アプリ</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand-panel">
+          <p class="eyebrow">Local Study Desk</p>
+          <h1>言語学習アプリ</h1>
+          <p class="muted">英語と中国語の学習アイテムを、ローカルで記録・復習するための学習スペースです。</p>
+        </div>
+
+        <nav class="side-nav">
+          <button class="nav-button active" data-page="home" type="button">ホーム</button>
+          <button class="nav-button" data-page="notebook" type="button">単語帳</button>
+          <button class="nav-button" data-page="review" type="button">復習モード</button>
+          <button class="nav-button" data-page="history" type="button">学習履歴</button>
+        </nav>
+
+        <section class="status-panel">
+          <h2>状態</h2>
+          <p id="status-text">読み込み中...</p>
+        </section>
+      </aside>
+
+      <main class="content">
+        <section class="page active" id="page-home">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Home</p>
+              <h2>今日の学習をここから始めます。</h2>
+            </div>
+          </div>
+          <div class="home-grid">
+            <button class="home-card" data-go="notebook" type="button">
+              <strong>単語帳</strong>
+              <span>単語、意味、例文、メモ、習得ステータスを管理</span>
+            </button>
+            <button class="home-card" data-go="review" type="button">
+              <strong>復習モード</strong>
+              <span>登録した単語をフラッシュカード形式で復習</span>
+            </button>
+            <button class="home-card" data-go="history" type="button">
+              <strong>学習履歴</strong>
+              <span>保存済みの学習記録を確認</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="page" id="page-notebook">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Notebook</p>
+              <h2>単語帳画面</h2>
+            </div>
+          </div>
+          <div class="filter-bar card">
+            <label>
+              言語フィルター
+              <select id="notebook-language-filter">
+                <option value="">すべて</option>
+                <option value="english">英語</option>
+                <option value="chinese">中国語</option>
+              </select>
+            </label>
+            <label>
+              ステータスフィルター
+              <select id="notebook-status-filter">
+                <option value="">すべて</option>
+                <option value="未学習">未学習</option>
+                <option value="復習中">復習中</option>
+                <option value="だいたい覚えた">だいたい覚えた</option>
+                <option value="習得済み">習得済み</option>
+              </select>
+            </label>
+            <label class="grow">
+              検索
+              <input id="notebook-query" type="text" placeholder="単語、意味、メモで検索" />
+            </label>
+            <button type="button" id="notebook-search" class="soft-button">検索</button>
+          </div>
+          <div class="two-column wide-right">
+            <section class="card">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>単語</th>
+                      <th>言語</th>
+                      <th>意味</th>
+                      <th>ステータス</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="notebook-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card">
+              <h3>新規登録 / 編集</h3>
+              <form id="notebook-detail-form" class="stack">
+                <input id="notebook-detail-id" type="hidden" />
+                <label>
+                  単語
+                  <input id="notebook-detail-term" type="text" />
+                </label>
+                <div class="field-row">
+                  <label>
+                    言語
+                    <select id="notebook-detail-language">
+                      <option value="english">英語</option>
+                      <option value="chinese">中国語</option>
+                    </select>
+                  </label>
+                  <label>
+                    拼音
+                    <input id="notebook-detail-pinyin" type="text" />
+                  </label>
+                </div>
+                <div class="field-row">
+                  <label>
+                    品詞
+                    <input id="notebook-detail-pos" type="text" />
+                  </label>
+                  <label>
+                    習得ステータス
+                    <select id="notebook-detail-status">
+                      <option value="未学習">未学習</option>
+                      <option value="復習中">復習中</option>
+                      <option value="だいたい覚えた">だいたい覚えた</option>
+                      <option value="習得済み">習得済み</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  意味
+                  <input id="notebook-detail-meaning" type="text" />
+                </label>
+                <label>
+                  例文
+                  <textarea id="notebook-detail-example" rows="4"></textarea>
+                </label>
+                <label>
+                  例文訳
+                  <textarea id="notebook-detail-example-translation" rows="3"></textarea>
+                </label>
+                <label>
+                  メモ
+                  <textarea id="notebook-detail-note" rows="3"></textarea>
+                </label>
+                <div class="mini-actions">
+                  <button type="submit">保存</button>
+                  <button type="button" id="new-notebook-item" class="soft-button">新規入力</button>
+                  <button type="button" id="delete-notebook-item" class="soft-button">削除</button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="page-review">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Review</p>
+              <h2>復習画面</h2>
+            </div>
+          </div>
+          <section class="card stack">
+            <div class="field-row">
+              <label>
+                言語フィルター
+                <select id="review-language">
+                  <option value="">すべて</option>
+                  <option value="english">英語</option>
+                  <option value="chinese">中国語</option>
+                </select>
+              </label>
+              <button type="button" id="load-review-card" class="soft-button">ランダム出題</button>
+            </div>
+            <div id="review-card" class="flashcard empty-state">
+              <p>ここに復習対象の単語が表示されます。</p>
+            </div>
+            <div class="mini-actions">
+              <button type="button" id="reveal-review-answer" class="soft-button">答えを表示</button>
+              <button type="button" id="review-known">覚えた</button>
+              <button type="button" id="review-unsure" class="soft-button">まだ不安</button>
+              <button type="button" id="review-next" class="soft-button">次の単語</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-history">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">History</p>
+              <h2>学習履歴画面</h2>
+            </div>
+            <button type="button" id="refresh-history" class="soft-button">再読み込み</button>
+          </div>
+          <div class="two-column wide-right">
+            <section class="card">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>日付</th>
+                      <th>言語</th>
+                      <th>モード</th>
+                      <th>タイトル</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="card">
+              <h3>詳細表示</h3>
+              <div id="history-detail" class="result-area empty-state">
+                <p>履歴を選ぶと詳細が表示されます。</p>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+node_modules
+dist
+.DS_Store
+.env
+*.log
+backend/data/history.json
+backend/data/notebook.json
+backend/data/review.json
