@@ -308,6 +308,18 @@ export async function getLearningSession(id) {
   return sessions.find((session) => session.id === id) || null;
 }
 
+export async function deleteLearningSession(id) {
+  const sessions = await readLearningSessions();
+  const nextSessions = sessions.filter((session) => session.id !== id);
+
+  if (nextSessions.length === sessions.length) {
+    return false;
+  }
+
+  await writeJsonFile(LEARNING_SESSIONS_FILE, nextSessions);
+  return true;
+}
+
 export async function readStudyLogs() {
   return readJsonFile(STUDY_LOGS_FILE, []);
 }

@@ -18,6 +18,7 @@
         <nav class="side-nav">
           <button class="nav-button active" data-page="home" type="button">ホーム</button>
           <button class="nav-button" data-page="learning-items" type="button">学習アイテム登録</button>
+          <button class="nav-button" data-page="course" type="button">学習タイマー</button>
           <button class="nav-button" data-page="notebook" type="button">単語帳</button>
           <button class="nav-button" data-page="review" type="button">復習モード</button>
           <button class="nav-button" data-page="history" type="button">学習履歴</button>
@@ -68,6 +69,10 @@
               <strong>学習アイテム登録</strong>
               <span>単語、文法、例文、リスニング文、作文ログを一元管理</span>
             </button>
+            <button class="home-card" data-go="course" type="button">
+              <strong>学習タイマー</strong>
+              <span>30分・60分・90分の固定コースで今日の学習を進行</span>
+            </button>
             <button class="home-card" data-go="notebook" type="button">
               <strong>単語帳</strong>
               <span>単語、意味、例文、メモ、習得ステータスを管理</span>
@@ -81,6 +86,71 @@
               <span>保存済みの学習記録を確認</span>
             </button>
           </div>
+        </section>
+
+        <section class="page" id="page-course">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Course Timer</p>
+              <h2>学習タイマー</h2>
+            </div>
+          </div>
+
+          <section id="course-select-view" class="stack">
+            <div class="course-grid" id="course-preset-list"></div>
+          </section>
+
+          <section id="course-confirm-view" class="card stack hidden">
+            <div>
+              <p class="eyebrow">Course Plan</p>
+              <h3 id="course-confirm-title"></h3>
+              <p id="course-confirm-description" class="muted"></p>
+            </div>
+            <div id="course-confirm-steps" class="course-step-list"></div>
+            <div class="mini-actions">
+              <button type="button" id="course-start">開始</button>
+              <button type="button" id="course-confirm-back" class="soft-button">戻る</button>
+            </div>
+          </section>
+
+          <section id="course-timer-view" class="card stack hidden">
+            <div class="course-timer-head">
+              <div>
+                <p class="eyebrow" id="course-active-name"></p>
+                <h3 id="course-step-title"></h3>
+                <p id="course-step-meta" class="muted"></p>
+              </div>
+              <div class="timer-display" id="course-timer-display">00:00</div>
+            </div>
+            <div class="progress-track">
+              <div id="course-progress-bar" class="progress-bar"></div>
+            </div>
+            <p id="course-step-instructions"></p>
+            <p id="course-next-step" class="muted"></p>
+            <div id="course-step-ui" class="section-card"></div>
+            <div class="mini-actions">
+              <button type="button" id="course-pause" class="soft-button">一時停止</button>
+              <button type="button" id="course-resume" class="soft-button">再開</button>
+              <button type="button" id="course-prev" class="soft-button">戻る</button>
+              <button type="button" id="course-next">次へ</button>
+              <button type="button" id="course-extend" class="soft-button">延長+3分</button>
+              <button type="button" id="course-skip" class="soft-button">スキップ</button>
+              <button type="button" id="course-end" class="soft-button">終了</button>
+            </div>
+          </section>
+
+          <section id="course-complete-view" class="card stack hidden">
+            <div>
+              <p class="eyebrow">Course Complete</p>
+              <h3>コース終了</h3>
+            </div>
+            <div id="course-summary" class="rendered-result"></div>
+            <div id="course-save-message" class="auth-message"></div>
+            <div class="mini-actions">
+              <button type="button" id="course-save">保存</button>
+              <button type="button" id="course-home" class="soft-button">ホームに戻る</button>
+            </div>
+          </section>
         </section>
 
         <section class="page" id="page-learning-items">

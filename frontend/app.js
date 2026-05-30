@@ -16,12 +16,16 @@ const state = {
   reviewIndex: 0,
   reviewRevealed: false,
   reviewedItems: [],
-  difficultReviewItems: []
+  difficultReviewItems: [],
+  selectedCourse: null,
+  courseRun: null,
+  courseTimerId: null
 };
 
 const localStoreKeys = {
   learningItems: "language-study.learningItems",
   srsData: "language-study.srsData",
+  learningSessions: "language-study.learningSessions",
   notebookItems: "language-study.notebookItems",
   historyItems: "language-study.historyItems"
 };
@@ -49,6 +53,35 @@ const elements = {
   learningItemTags: document.querySelector("#learning-item-tags"),
   newLearningItem: document.querySelector("#new-learning-item"),
   deleteLearningItem: document.querySelector("#delete-learning-item"),
+  coursePresetList: document.querySelector("#course-preset-list"),
+  courseSelectView: document.querySelector("#course-select-view"),
+  courseConfirmView: document.querySelector("#course-confirm-view"),
+  courseTimerView: document.querySelector("#course-timer-view"),
+  courseCompleteView: document.querySelector("#course-complete-view"),
+  courseConfirmTitle: document.querySelector("#course-confirm-title"),
+  courseConfirmDescription: document.querySelector("#course-confirm-description"),
+  courseConfirmSteps: document.querySelector("#course-confirm-steps"),
+  courseStart: document.querySelector("#course-start"),
+  courseConfirmBack: document.querySelector("#course-confirm-back"),
+  courseActiveName: document.querySelector("#course-active-name"),
+  courseStepTitle: document.querySelector("#course-step-title"),
+  courseStepMeta: document.querySelector("#course-step-meta"),
+  courseTimerDisplay: document.querySelector("#course-timer-display"),
+  courseProgressBar: document.querySelector("#course-progress-bar"),
+  courseStepInstructions: document.querySelector("#course-step-instructions"),
+  courseNextStep: document.querySelector("#course-next-step"),
+  courseStepUi: document.querySelector("#course-step-ui"),
+  coursePause: document.querySelector("#course-pause"),
+  courseResume: document.querySelector("#course-resume"),
+  coursePrev: document.querySelector("#course-prev"),
+  courseNext: document.querySelector("#course-next"),
+  courseExtend: document.querySelector("#course-extend"),
+  courseSkip: document.querySelector("#course-skip"),
+  courseEnd: document.querySelector("#course-end"),
+  courseSummary: document.querySelector("#course-summary"),
+  courseSaveMessage: document.querySelector("#course-save-message"),
+  courseSave: document.querySelector("#course-save"),
+  courseHome: document.querySelector("#course-home"),
   historyTableBody: document.querySelector("#history-table-body"),
   historyDetail: document.querySelector("#history-detail"),
   refreshHistory: document.querySelector("#refresh-history"),
@@ -94,6 +127,51 @@ const elements = {
   authMessage: document.querySelector("#auth-message"),
   authUserEmail: document.querySelector("#auth-user-email")
 };
+
+const coursePresets = [
+  {
+    id: "course-30",
+    name: "30分コース",
+    totalMinutes: 30,
+    description: "忙しい日でも最低限",
+    steps: [
+      { id: "srs-5", title: "SRS復習", type: "srs", minutes: 5, instructions: "今日復習すべき学習アイテムを短時間で確認します。" },
+      { id: "listening-7", title: "リスニング", type: "listening", minutes: 7, instructions: "登録済みのlisteningまたはsentenceを聞く練習です。" },
+      { id: "recording-5", title: "音読", type: "recording", minutes: 5, instructions: "例文や本文を声に出して読みます。録音機能は今後接続します。" },
+      { id: "reading-8", title: "読解・例文確認", type: "reading", minutes: 8, instructions: "登録済みの例文や本文を読み、意味と構造を確認します。" },
+      { id: "writing-5", title: "ミニ作文・学習ログ", type: "writing", minutes: 5, instructions: "短い作文を書き、今日の気づきを残します。" }
+    ]
+  },
+  {
+    id: "course-60",
+    name: "60分コース",
+    totalMinutes: 60,
+    description: "標準バランス学習",
+    steps: [
+      { id: "srs-10", title: "SRS復習", type: "srs", minutes: 10, instructions: "今日復習すべき学習アイテムを確認します。" },
+      { id: "dictation-10", title: "ディクテーション", type: "dictation", minutes: 10, instructions: "聞き取った内容を書き取る練習です。音声機能は今後接続します。" },
+      { id: "recording-10", title: "音読・録音", type: "recording", minutes: 10, instructions: "本文や例文を音読します。録音機能は今後接続します。" },
+      { id: "grammar-15", title: "読解・文法確認", type: "grammar", minutes: 15, instructions: "登録済みの文法・例文を確認します。" },
+      { id: "writing-10", title: "作文・要約", type: "writing", minutes: 10, instructions: "短い作文または要約を書きます。" },
+      { id: "log-5", title: "学習ログ", type: "log", minutes: 5, instructions: "今日の学習メモを整理します。" }
+    ]
+  },
+  {
+    id: "course-90",
+    name: "90分コース",
+    totalMinutes: 90,
+    description: "しっかり集中学習",
+    steps: [
+      { id: "srs-15", title: "SRS復習", type: "srs", minutes: 15, instructions: "今日復習すべき学習アイテムをしっかり確認します。" },
+      { id: "grammar-15", title: "精読・文法分析", type: "grammar", minutes: 15, instructions: "文法や例文の構造を分析します。" },
+      { id: "dictation-10", title: "ディクテーション", type: "dictation", minutes: 10, instructions: "聞き取った内容を書き取る練習です。" },
+      { id: "shadowing-15", title: "リスニング・シャドーイング", type: "shadowing", minutes: 15, instructions: "登録済みのlisteningまたはsentenceでシャドーイングします。" },
+      { id: "recording-10", title: "音読録音", type: "recording", minutes: 10, instructions: "音読して発音や流れを確認します。録音機能は今後接続します。" },
+      { id: "writing-15", title: "作文・要約", type: "writing", minutes: 15, instructions: "学習内容を使って作文または要約を書きます。" },
+      { id: "log-10", title: "添削プロンプト生成・学習ログ", type: "log", minutes: 10, instructions: "添削に出したい内容や今日の学習ログを整理します。" }
+    ]
+  }
+];
 
 // ---- 認証 ---------------------------------------------------------------
 
@@ -299,7 +377,14 @@ function learningItemTypeLabel(type) {
     grammar: "文法",
     sentence: "例文",
     listening: "リスニング",
-    writing: "作文"
+    writing: "作文",
+    srs: "SRS",
+    dictation: "ディクテーション",
+    shadowing: "シャドーイング",
+    reading: "読解",
+    grammar: "文法",
+    recording: "録音",
+    log: "ログ"
   };
 
   return labels[type] || type;
@@ -339,6 +424,11 @@ function switchPage(pageId) {
 
   if (pageId === "review") {
     loadReviewItems();
+  }
+
+  if (pageId === "course") {
+    renderCoursePresetList();
+    loadLearningItems();
   }
 
 }
@@ -602,6 +692,53 @@ async function handleLocalJson(url, options = {}) {
     }
   }
 
+  if (path === "/api/learning-sessions" && method === "GET") {
+    return localJsonResponse({ items: sortByCreatedAtDesc(readLocalCollection(localStoreKeys.learningSessions)) });
+  }
+
+  if (path === "/api/learning-sessions" && method === "POST") {
+    const items = readLocalCollection(localStoreKeys.learningSessions);
+    const timestamp = new Date().toISOString();
+    const item = {
+      id: body.id || createLocalId(),
+      date: body.date || timestamp.slice(0, 10),
+      courseId: body.courseId || "",
+      courseName: body.courseName || "",
+      plannedMinutes: Number(body.plannedMinutes || 0),
+      actualMinutes: Number(body.actualMinutes || 0),
+      completedSteps: Array.isArray(body.completedSteps) ? body.completedSteps : [],
+      skippedSteps: Array.isArray(body.skippedSteps) ? body.skippedSteps : [],
+      reviewedItemIds: Array.isArray(body.reviewedItemIds) ? body.reviewedItemIds : [],
+      mistakeItemIds: Array.isArray(body.mistakeItemIds) ? body.mistakeItemIds : [],
+      dictationCount: Number(body.dictationCount || 0),
+      recordingCount: Number(body.recordingCount || 0),
+      writingText: body.writingText || "",
+      feedbackText: body.feedbackText || "",
+      note: body.note || "",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    items.unshift(item);
+    writeLocalCollection(localStoreKeys.learningSessions, items);
+    return localJsonResponse({ item });
+  }
+
+  if (path.startsWith("/api/learning-sessions/")) {
+    const id = decodeURIComponent(path.split("/").pop());
+    const items = readLocalCollection(localStoreKeys.learningSessions);
+    const index = items.findIndex((item) => item.id === id);
+
+    if (method === "GET") {
+      return localJsonResponse({ item: index === -1 ? null : items[index] });
+    }
+
+    if (method === "DELETE" && index !== -1) {
+      items.splice(index, 1);
+      writeLocalCollection(localStoreKeys.learningSessions, items);
+      return localJsonResponse({ ok: true });
+    }
+  }
+
   if (path === "/api/vocabulary" && method === "GET") {
     const items = readLocalCollection(localStoreKeys.notebookItems);
     return localJsonResponse({ items: filterVocabularyItems(items, parsedUrl.searchParams) });
@@ -722,7 +859,7 @@ function getLearningItemFilters() {
   return new URLSearchParams(query ? query.slice(1) : "");
 }
 
-const { learningItemsRepository, srsRepository } = createRepositories({
+const { learningItemsRepository, srsRepository, learningSessionsRepository } = createRepositories({
   supabase,
   fetchJson,
   getCurrentUser: () => state.currentUser,
@@ -848,6 +985,410 @@ async function deleteLearningItem(id) {
     await loadLearningItems();
     setStatus("学習アイテムを削除しました。");
   }, "学習アイテムを削除しています...");
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function todayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatTimer(seconds) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const rest = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function renderCoursePresetList() {
+  elements.coursePresetList.innerHTML = coursePresets
+    .map(
+      (course) => `
+        <button type="button" class="home-card course-preset-button" data-course-id="${course.id}">
+          <strong>${escapeHtml(course.name)}</strong>
+          <span>${escapeHtml(course.description)}</span>
+          <span>${escapeHtml(String(course.totalMinutes))}分 / ${escapeHtml(String(course.steps.length))}ステップ</span>
+        </button>
+      `
+    )
+    .join("");
+}
+
+function showCourseView(viewName) {
+  elements.courseSelectView.classList.toggle("hidden", viewName !== "select");
+  elements.courseConfirmView.classList.toggle("hidden", viewName !== "confirm");
+  elements.courseTimerView.classList.toggle("hidden", viewName !== "timer");
+  elements.courseCompleteView.classList.toggle("hidden", viewName !== "complete");
+}
+
+function selectCourse(courseId) {
+  const course = coursePresets.find((entry) => entry.id === courseId);
+  if (!course) {
+    setStatus("コースが見つかりません。");
+    return;
+  }
+
+  state.selectedCourse = course;
+  elements.courseConfirmTitle.textContent = `${course.name}（${course.totalMinutes}分）`;
+  elements.courseConfirmDescription.textContent = course.description;
+  elements.courseConfirmSteps.innerHTML = course.steps
+    .map(
+      (step, index) => `
+        <div class="course-step-row">
+          <strong>${index + 1}</strong>
+          <div>
+            <strong>${escapeHtml(step.title)}</strong>
+            <div class="muted">${escapeHtml(step.instructions)}</div>
+          </div>
+          <span>${escapeHtml(String(step.minutes))}分</span>
+        </div>
+      `
+    )
+    .join("");
+  showCourseView("confirm");
+}
+
+function resetCourseToSelect() {
+  stopCourseTimer();
+  state.selectedCourse = null;
+  state.courseRun = null;
+  elements.courseSaveMessage.textContent = "";
+  showCourseView("select");
+}
+
+function createCourseRun(course) {
+  return {
+    course,
+    currentStepIndex: 0,
+    remainingSeconds: course.steps[0].minutes * 60,
+    elapsedSeconds: 0,
+    isRunning: true,
+    isComplete: false,
+    saved: false,
+    renderedStepIndex: -1,
+    completedSteps: [],
+    skippedSteps: [],
+    reviewedItemIds: [],
+    mistakeItemIds: [],
+    dictationCount: 0,
+    recordingCount: 0,
+    writingText: "",
+    note: "",
+    startedAt: new Date().toISOString()
+  };
+}
+
+function currentCourseStep() {
+  return state.courseRun?.course.steps[state.courseRun.currentStepIndex] || null;
+}
+
+function startCourse() {
+  if (!state.selectedCourse) {
+    setStatus("開始するコースを選んでください。");
+    return;
+  }
+
+  state.courseRun = createCourseRun(state.selectedCourse);
+  showCourseView("timer");
+  renderCourseTimer();
+  startCourseTimer();
+  setStatus(`${state.selectedCourse.name}を開始しました。`);
+}
+
+function startCourseTimer() {
+  stopCourseTimer();
+  state.courseTimerId = window.setInterval(() => {
+    const run = state.courseRun;
+    if (!run || !run.isRunning || run.isComplete) {
+      return;
+    }
+
+    run.elapsedSeconds += 1;
+    run.remainingSeconds -= 1;
+
+    if (run.remainingSeconds <= 0) {
+      completeCurrentCourseStep();
+      advanceCourseStep();
+      return;
+    }
+
+    renderCourseTimer();
+  }, 1000);
+}
+
+function stopCourseTimer() {
+  if (state.courseTimerId) {
+    window.clearInterval(state.courseTimerId);
+    state.courseTimerId = null;
+  }
+}
+
+function markCourseStepDone(collectionName) {
+  const step = currentCourseStep();
+  if (!step || !state.courseRun) {
+    return;
+  }
+
+  state.courseRun[collectionName] = uniqueValues([...state.courseRun[collectionName], step.id]);
+}
+
+function completeCurrentCourseStep() {
+  markCourseStepDone("completedSteps");
+  const step = currentCourseStep();
+  if (step?.type === "dictation") {
+    state.courseRun.dictationCount += 1;
+  }
+  if (step?.type === "recording") {
+    state.courseRun.recordingCount += 1;
+  }
+  syncCourseTextInputs();
+}
+
+function syncCourseTextInputs() {
+  if (!state.courseRun) {
+    return;
+  }
+
+  const writingInput = document.querySelector("#course-writing-text");
+  const noteInput = document.querySelector("#course-log-note");
+
+  if (writingInput) {
+    state.courseRun.writingText = writingInput.value;
+  }
+
+  if (noteInput) {
+    state.courseRun.note = noteInput.value;
+  }
+}
+
+function advanceCourseStep() {
+  const run = state.courseRun;
+  if (!run) {
+    return;
+  }
+
+  if (run.currentStepIndex >= run.course.steps.length - 1) {
+    finishCourse();
+    return;
+  }
+
+  run.currentStepIndex += 1;
+  run.remainingSeconds = run.course.steps[run.currentStepIndex].minutes * 60;
+  run.isRunning = true;
+  renderCourseTimer();
+}
+
+function goPreviousCourseStep() {
+  const run = state.courseRun;
+  if (!run || run.currentStepIndex === 0) {
+    return;
+  }
+
+  syncCourseTextInputs();
+  run.currentStepIndex -= 1;
+  run.remainingSeconds = run.course.steps[run.currentStepIndex].minutes * 60;
+  renderCourseTimer();
+}
+
+function skipCourseStep() {
+  markCourseStepDone("skippedSteps");
+  advanceCourseStep();
+}
+
+function finishCourse() {
+  const run = state.courseRun;
+  if (!run) {
+    return;
+  }
+
+  syncCourseTextInputs();
+  stopCourseTimer();
+  run.isRunning = false;
+  run.isComplete = true;
+  showCourseView("complete");
+  renderCourseSummary();
+  setStatus("コースを終了しました。必要に応じて保存してください。");
+}
+
+function updateCourseFromSrsReview(entry, rating) {
+  const run = state.courseRun;
+  if (!run) {
+    return;
+  }
+
+  run.reviewedItemIds = uniqueValues([...run.reviewedItemIds, entry.item.id]);
+  if (rating === "hard" || rating === "forgot") {
+    run.mistakeItemIds = uniqueValues([...run.mistakeItemIds, entry.item.id]);
+  }
+}
+
+function renderCourseTimer() {
+  const run = state.courseRun;
+  const step = currentCourseStep();
+  if (!run || !step) {
+    return;
+  }
+
+  const nextStep = run.course.steps[run.currentStepIndex + 1];
+  const stepTotalSeconds = step.minutes * 60;
+  const elapsedInStep = Math.max(0, stepTotalSeconds - run.remainingSeconds);
+  const progressPercent = Math.min(100, Math.round((elapsedInStep / stepTotalSeconds) * 100));
+
+  elements.courseActiveName.textContent = run.course.name;
+  elements.courseStepTitle.textContent = step.title;
+  elements.courseStepMeta.textContent = `${run.currentStepIndex + 1} / ${run.course.steps.length} ・ ${learningItemTypeLabel(step.type)} ・ ${step.minutes}分`;
+  elements.courseTimerDisplay.textContent = formatTimer(run.remainingSeconds);
+  elements.courseProgressBar.style.width = `${progressPercent}%`;
+  elements.courseStepInstructions.textContent = step.instructions;
+  elements.courseNextStep.textContent = nextStep ? `次のステップ: ${nextStep.title}` : "次のステップ: コース終了";
+  elements.coursePause.disabled = !run.isRunning;
+  elements.courseResume.disabled = run.isRunning;
+  if (run.renderedStepIndex !== run.currentStepIndex) {
+    renderCourseStepUi(step);
+  }
+}
+
+function renderCourseStepUi(step) {
+  const run = state.courseRun;
+  const srsCount = state.reviewQueue.length;
+
+  if (step.type === "srs") {
+    elements.courseStepUi.innerHTML = `
+      <div class="course-step-ui-grid">
+        <p>既存の「今日のSRS復習」と同じ対象を使います。</p>
+        <p>現在読み込み済みの復習対象数: ${escapeHtml(String(srsCount))}</p>
+        <div class="mini-actions">
+          <button type="button" class="soft-button" id="course-load-srs">復習対象数を更新</button>
+          <button type="button" id="course-open-srs">今日のSRS復習を開く</button>
+        </div>
+      </div>
+    `;
+    run.renderedStepIndex = run.currentStepIndex;
+    document.querySelector("#course-load-srs").addEventListener("click", async () => {
+      await loadReviewItems();
+      if (state.courseRun) {
+        state.courseRun.renderedStepIndex = -1;
+        renderCourseTimer();
+      }
+    });
+    document.querySelector("#course-open-srs").addEventListener("click", () => switchPage("review"));
+    return;
+  }
+
+  if (step.type === "dictation") {
+    elements.courseStepUi.innerHTML = `
+      <div class="course-step-ui-grid">
+        <p>聞き取った内容を書き取ります。音声再生は今後接続します。</p>
+        <textarea rows="5" placeholder="聞き取った内容を入力"></textarea>
+      </div>
+    `;
+    run.renderedStepIndex = run.currentStepIndex;
+    return;
+  }
+
+  if (step.type === "recording") {
+    elements.courseStepUi.innerHTML = "<p>本文や例文を声に出して読みます。録音機能は今後MediaRecorderに接続します。</p>";
+    run.renderedStepIndex = run.currentStepIndex;
+    return;
+  }
+
+  if (step.type === "listening" || step.type === "shadowing") {
+    elements.courseStepUi.innerHTML = "<p>登録済みのlisteningまたはsentenceを聞く練習です。音声再生機能は今後接続します。</p>";
+    run.renderedStepIndex = run.currentStepIndex;
+    return;
+  }
+
+  if (step.type === "reading" || step.type === "grammar") {
+    const candidates = state.learningItems
+      .filter((item) => ["grammar", "sentence", "listening"].includes(item.type))
+      .slice(0, 3);
+    elements.courseStepUi.innerHTML = candidates.length
+      ? `<div class="course-step-ui-grid">${candidates
+          .map((item) => `<div><strong>${escapeHtml(item.title)}</strong><p class="muted">${escapeHtml(item.meaning || item.exampleTranslation || item.content || "")}</p></div>`)
+          .join("")}</div>`
+      : "<p>登録済みのLearningItemから文法・例文・リスニング項目を確認してください。</p>";
+    run.renderedStepIndex = run.currentStepIndex;
+    return;
+  }
+
+  if (step.type === "writing") {
+    elements.courseStepUi.innerHTML = `
+      <label>
+        短い作文・要約
+        <textarea id="course-writing-text" rows="6">${escapeHtml(run.writingText)}</textarea>
+      </label>
+    `;
+    run.renderedStepIndex = run.currentStepIndex;
+    document.querySelector("#course-writing-text").addEventListener("input", syncCourseTextInputs);
+    return;
+  }
+
+  elements.courseStepUi.innerHTML = `
+    <label>
+      今日のメモ
+      <textarea id="course-log-note" rows="6">${escapeHtml(run.note)}</textarea>
+    </label>
+  `;
+  run.renderedStepIndex = run.currentStepIndex;
+  document.querySelector("#course-log-note").addEventListener("input", syncCourseTextInputs);
+}
+
+function courseSessionPayload() {
+  const run = state.courseRun;
+  return {
+    date: todayDateString(),
+    courseId: run.course.id,
+    courseName: run.course.name,
+    plannedMinutes: run.course.totalMinutes,
+    actualMinutes: Math.max(1, Math.ceil(run.elapsedSeconds / 60)),
+    completedSteps: uniqueValues(run.completedSteps),
+    skippedSteps: uniqueValues(run.skippedSteps),
+    reviewedItemIds: uniqueValues([...run.reviewedItemIds, ...state.reviewedItems.map((entry) => entry.item.id)]),
+    mistakeItemIds: uniqueValues([...run.mistakeItemIds, ...state.difficultReviewItems.map((entry) => entry.item.id)]),
+    dictationCount: run.dictationCount,
+    recordingCount: run.recordingCount,
+    writingText: run.writingText,
+    feedbackText: "",
+    note: run.note
+  };
+}
+
+function renderCourseSummary() {
+  if (!state.courseRun) {
+    return;
+  }
+
+  const payload = courseSessionPayload();
+  elements.courseSummary.innerHTML = `
+    <div class="course-summary-grid">
+      <div class="course-summary-item"><span>コース</span><strong>${escapeHtml(payload.courseName)}</strong></div>
+      <div class="course-summary-item"><span>予定時間</span><strong>${escapeHtml(String(payload.plannedMinutes))}分</strong></div>
+      <div class="course-summary-item"><span>実際の時間</span><strong>${escapeHtml(String(payload.actualMinutes))}分</strong></div>
+      <div class="course-summary-item"><span>完了ステップ</span><strong>${escapeHtml(String(payload.completedSteps.length))}</strong></div>
+      <div class="course-summary-item"><span>復習項目</span><strong>${escapeHtml(String(payload.reviewedItemIds.length))}</strong></div>
+      <div class="course-summary-item"><span>難しい/忘れた</span><strong>${escapeHtml(String(payload.mistakeItemIds.length))}</strong></div>
+    </div>
+    <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
+    <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>
+    <article class="section-card"><h4>今日のメモ</h4><p>${escapeHtml(payload.note || "未入力")}</p></article>
+  `;
+}
+
+async function saveCourseSession() {
+  if (!state.courseRun) {
+    setStatus("保存するコース結果がありません。");
+    return;
+  }
+
+  await withBusy(async () => {
+    const data = await learningSessionsRepository.createLearningSession(courseSessionPayload());
+    state.courseRun.saved = true;
+    elements.courseSaveMessage.textContent = `LearningSessionを保存しました。ID: ${data.item.id}`;
+    elements.courseSaveMessage.classList.remove("auth-message--error");
+    setStatus("LearningSessionを保存しました。");
+  }, "LearningSessionを保存しています...");
 }
 
 function notebookQueryParams() {
@@ -1263,6 +1804,7 @@ async function submitReview(rating) {
   await withBusy(async () => {
     await srsRepository.updateSrsAfterReview(entry.item.id, rating);
     state.reviewedItems.push(entry);
+    updateCourseFromSrsReview(entry, rating);
     if (rating === "hard" || rating === "forgot") {
       state.difficultReviewItems.push(entry);
     }
@@ -1315,6 +1857,47 @@ elements.learningItemTableBody.addEventListener("click", async (event) => {
   if (target.classList.contains("learning-item-delete")) {
     await deleteLearningItem(target.dataset.id);
   }
+});
+
+elements.coursePresetList.addEventListener("click", (event) => {
+  const button = event.target.closest(".course-preset-button");
+  if (button) {
+    selectCourse(button.dataset.courseId);
+  }
+});
+
+elements.courseConfirmBack.addEventListener("click", resetCourseToSelect);
+elements.courseStart.addEventListener("click", startCourse);
+elements.coursePause.addEventListener("click", () => {
+  if (state.courseRun) {
+    state.courseRun.isRunning = false;
+    renderCourseTimer();
+  }
+});
+elements.courseResume.addEventListener("click", () => {
+  if (state.courseRun) {
+    state.courseRun.isRunning = true;
+    renderCourseTimer();
+    startCourseTimer();
+  }
+});
+elements.coursePrev.addEventListener("click", goPreviousCourseStep);
+elements.courseNext.addEventListener("click", () => {
+  completeCurrentCourseStep();
+  advanceCourseStep();
+});
+elements.courseExtend.addEventListener("click", () => {
+  if (state.courseRun) {
+    state.courseRun.remainingSeconds += 180;
+    renderCourseTimer();
+  }
+});
+elements.courseSkip.addEventListener("click", skipCourseStep);
+elements.courseEnd.addEventListener("click", finishCourse);
+elements.courseSave.addEventListener("click", saveCourseSession);
+elements.courseHome.addEventListener("click", () => {
+  resetCourseToSelect();
+  switchPage("home");
 });
 
 elements.notebookSearch.addEventListener("click", loadNotebook);
@@ -1375,7 +1958,15 @@ elements.reviewForgot.addEventListener("click", async () => {
   await submitReview("forgot");
 });
 
+window.addEventListener("beforeunload", (event) => {
+  if (state.courseRun && !state.courseRun.isComplete && !state.courseRun.saved) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+});
+
 clearHistoryDetail();
 renderReviewCard();
+renderCoursePresetList();
 setStatus("準備完了");
 initAuth();

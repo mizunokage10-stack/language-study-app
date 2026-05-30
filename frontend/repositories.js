@@ -83,6 +83,48 @@ function toSrsDataPatch(patch) {
   return row;
 }
 
+function toLearningSession(row) {
+  return {
+    id: row.id,
+    date: row.date || "",
+    courseId: row.course_id || "",
+    courseName: row.course_name || "",
+    plannedMinutes: Number(row.planned_minutes || 0),
+    actualMinutes: Number(row.actual_minutes || 0),
+    completedSteps: Array.isArray(row.completed_steps) ? row.completed_steps : [],
+    skippedSteps: Array.isArray(row.skipped_steps) ? row.skipped_steps : [],
+    reviewedItemIds: Array.isArray(row.reviewed_item_ids) ? row.reviewed_item_ids : [],
+    mistakeItemIds: Array.isArray(row.mistake_item_ids) ? row.mistake_item_ids : [],
+    dictationCount: Number(row.dictation_count || 0),
+    recordingCount: Number(row.recording_count || 0),
+    writingText: row.writing_text || "",
+    feedbackText: row.feedback_text || "",
+    note: row.note || "",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
+function toLearningSessionRow(session, userId) {
+  return {
+    user_id: userId,
+    date: session.date || todayIsoDate(),
+    course_id: session.courseId || "",
+    course_name: session.courseName || "",
+    planned_minutes: Number(session.plannedMinutes || 0),
+    actual_minutes: Number(session.actualMinutes || 0),
+    completed_steps: Array.isArray(session.completedSteps) ? session.completedSteps : [],
+    skipped_steps: Array.isArray(session.skippedSteps) ? session.skippedSteps : [],
+    reviewed_item_ids: Array.isArray(session.reviewedItemIds) ? session.reviewedItemIds : [],
+    mistake_item_ids: Array.isArray(session.mistakeItemIds) ? session.mistakeItemIds : [],
+    dictation_count: Number(session.dictationCount || 0),
+    recording_count: Number(session.recordingCount || 0),
+    writing_text: session.writingText || "",
+    feedback_text: session.feedbackText || "",
+    note: session.note || ""
+  };
+}
+
 const srsReviewTypes = new Set(["vocabulary", "grammar", "sentence", "listening"]);
 
 function todayIsoDate() {
@@ -463,6 +505,73 @@ export function createRepositories({
     }
   };
 
+  const localLearningSessionsRepository = {
+    async getLearningSessions() {
+      return fetchJson("/api/learning-sessions");
+    },
+
+    async createLearningSession(payload) {
+      return fetchJson("/api/learning-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async deleteLearningSession(id) {
+      return fetchJson(`/api/learning-sessions/${id}`, {
+        method: "DELETE"
+      });
+    }
+  };
+
+  const supabaseLearningSessionsRepository = {
+    async getLearningSessions() {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("learning_sessions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false });
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { items: (data || []).map(toLearningSession) };
+    },
+
+    async createLearningSession(payload) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("learning_sessions")
+        .insert(toLearningSessionRow(payload, user.id))
+        .select("*")
+        .single();
+
+      if (error) {
+        throw new Error(formatSupabaseError("保存", error));
+      }
+
+      return { item: toLearningSession(data) };
+    },
+
+    async deleteLearningSession(id) {
+      const user = getSupabaseUser();
+      const { error } = await supabase
+        .from("learning_sessions")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw new Error(formatSupabaseError("削除", error));
+      }
+
+      return { ok: true };
+    }
+  };
+
   return {
     learningItemsRepository: {
       getLearningItems: (...args) =>
@@ -511,6 +620,20 @@ export function createRepositories({
         shouldUseSupabase()
           ? supabaseSrsRepository.getDueReviewItems(...args)
           : localSrsRepository.getDueReviewItems(...args)
+    },
+    learningSessionsRepository: {
+      getLearningSessions: (...args) =>
+        shouldUseSupabase()
+          ? supabaseLearningSessionsRepository.getLearningSessions(...args)
+          : localLearningSessionsRepository.getLearningSessions(...args),
+      createLearningSession: (...args) =>
+        shouldUseSupabase()
+          ? supabaseLearningSessionsRepository.createLearningSession(...args)
+          : localLearningSessionsRepository.createLearningSession(...args),
+      deleteLearningSession: (...args) =>
+        shouldUseSupabase()
+          ? supabaseLearningSessionsRepository.deleteLearningSession(...args)
+          : localLearningSessionsRepository.deleteLearningSession(...args)
     }
   };
 }
