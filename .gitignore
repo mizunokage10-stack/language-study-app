@@ -3,6 +3,7 @@ frontend/supabase-config.js
 dist
 .DS_Store
 .env
+.env.local
 *.log
 backend/data/history.json
 backend/data/notebook.json

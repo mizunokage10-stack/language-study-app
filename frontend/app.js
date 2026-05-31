@@ -24,6 +24,9 @@ const state = {
   selectedCourse: null,
   courseRun: null,
   courseTimerId: null,
+  dbVocabulary: [],
+  dbReadingMaterials: [],
+  courseFilters: { language: "english", cefrLevel: "A1", domain: "", duration: "" },
   ttsVoices: [],
   ttsRequestId: 0,
   dictationSession: null,
@@ -67,6 +70,12 @@ const elements = {
   speakLearningItem: document.querySelector("#speak-learning-item"),
   deleteLearningItem: document.querySelector("#delete-learning-item"),
   coursePresetList: document.querySelector("#course-preset-list"),
+  courseFilterLanguage: document.querySelector("#course-filter-language"),
+  courseFilterCefr: document.querySelector("#course-filter-cefr"),
+  courseFilterDomain: document.querySelector("#course-filter-domain"),
+  courseFilterDuration: document.querySelector("#course-filter-duration"),
+  courseFilterApply: document.querySelector("#course-filter-apply"),
+  courseMaterialsMessage: document.querySelector("#course-materials-message"),
   courseSelectView: document.querySelector("#course-select-view"),
   courseConfirmView: document.querySelector("#course-confirm-view"),
   courseTimerView: document.querySelector("#course-timer-view"),
@@ -202,6 +211,21 @@ const coursePresets = [
       { id: "recording-10", title: "音読録音", type: "recording", minutes: 10, instructions: "音読して発音や流れを確認します。録音機能は今後接続します。" },
       { id: "writing-15", title: "作文・要約", type: "writing", minutes: 15, instructions: "学習内容を使って作文または要約を書きます。" },
       { id: "log-10", title: "添削プロンプト生成・学習ログ", type: "log", minutes: 10, instructions: "添削に出したい内容や今日の学習ログを整理します。" }
+    ]
+  },
+  {
+    id: "course-120",
+    name: "120分コース",
+    totalMinutes: 120,
+    description: "週末の集中学習向け",
+    steps: [
+      { id: "srs-20", title: "SRS復習", type: "srs", minutes: 20, instructions: "今日復習すべき学習アイテムをしっかり確認します。" },
+      { id: "vocabulary-20", title: "語彙学習", type: "reading", minutes: 20, instructions: "新しい語彙を文脈と一緒に確認します。" },
+      { id: "grammar-20", title: "精読・文法分析", type: "grammar", minutes: 20, instructions: "文法や例文の構造を分析します。" },
+      { id: "dictation-15", title: "ディクテーション", type: "dictation", minutes: 15, instructions: "聞き取った内容を書き取る練習です。" },
+      { id: "shadowing-15", title: "シャドーイング", type: "shadowing", minutes: 15, instructions: "お手本に合わせて発話練習します。" },
+      { id: "writing-20", title: "作文", type: "writing", minutes: 20, instructions: "学習内容を使って作文または要約を書きます。" },
+      { id: "log-10b", title: "学習ログ", type: "log", minutes: 10, instructions: "添削に出したい内容や今日の学習ログを整理します。" }
     ]
   }
 ];
@@ -1474,6 +1498,7 @@ function switchPage(pageId) {
   if (pageId === "course") {
     renderCoursePresetList();
     loadLearningItems();
+    loadCourseDomains();
   }
 
   if (pageId === "audio") {
@@ -2126,8 +2151,92 @@ function formatTimer(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
 
+function setCoursesMaterialsMessage(message, isError = false) {
+  if (!elements.courseMaterialsMessage) return;
+  elements.courseMaterialsMessage.textContent = message;
+  elements.courseMaterialsMessage.classList.toggle("auth-message--error", isError);
+}
+
+async function fetchVocabulary(language, cefrLevel, domain, limit = 20) {
+  const params = new URLSearchParams({ language, cefr_level: cefrLevel });
+  if (domain) params.set("domain", domain);
+  params.set("limit", String(limit));
+  const response = await fetch(`/api/materials/vocabulary?${params}`);
+  if (!response.ok) throw new Error(`語彙取得エラー: ${response.status}`);
+  const data = await response.json();
+  return data.items || [];
+}
+
+async function fetchReadingMaterials(language, cefrLevel, domain) {
+  const params = new URLSearchParams({ language, cefr_level: cefrLevel });
+  if (domain) params.set("domain", domain);
+  const response = await fetch(`/api/materials/reading?${params}`);
+  if (!response.ok) throw new Error(`文章教材取得エラー: ${response.status}`);
+  const data = await response.json();
+  return data.items || [];
+}
+
+async function loadCourseDomains() {
+  try {
+    const response = await fetch("/api/materials/domains");
+    if (!response.ok) return;
+    const data = await response.json();
+    const domains = data.domains || [];
+    if (!elements.courseFilterDomain) return;
+    const current = elements.courseFilterDomain.value;
+    elements.courseFilterDomain.innerHTML =
+      `<option value="">すべて</option>` +
+      domains
+        .map((d) => `<option value="${escapeHtml(String(d.id))}">${escapeHtml(d.name_ja || String(d.id))}</option>`)
+        .join("");
+    if (domains.some((d) => String(d.id) === current)) {
+      elements.courseFilterDomain.value = current;
+    }
+  } catch {
+    // domains fetch failed - default options remain
+  }
+}
+
+async function loadCourseMaterials() {
+  const language = elements.courseFilterLanguage?.value || "english";
+  const cefrLevel = elements.courseFilterCefr?.value || "A1";
+  const domain = elements.courseFilterDomain?.value || "";
+  state.courseFilters = { language, cefrLevel, domain, duration: elements.courseFilterDuration?.value || "" };
+
+  setCoursesMaterialsMessage("教材を読み込んでいます...");
+
+  try {
+    const [vocabulary, reading] = await Promise.all([
+      fetchVocabulary(language, cefrLevel, domain, 30),
+      fetchReadingMaterials(language, cefrLevel, domain)
+    ]);
+    state.dbVocabulary = vocabulary;
+    state.dbReadingMaterials = reading;
+
+    const total = vocabulary.length + reading.length;
+    if (total === 0) {
+      setCoursesMaterialsMessage("DBに該当する教材が見つかりませんでした。既存の学習アイテムで進めます。");
+    } else {
+      setCoursesMaterialsMessage(`語彙 ${vocabulary.length}件・文章 ${reading.length}件 の教材を読み込みました。`);
+    }
+  } catch (error) {
+    state.dbVocabulary = [];
+    state.dbReadingMaterials = [];
+    setCoursesMaterialsMessage(
+      `教材の読み込みに失敗しました。既存の学習アイテムで進めます。（${error.message}）`,
+      true
+    );
+  }
+
+  renderCoursePresetList();
+}
+
 function renderCoursePresetList() {
-  elements.coursePresetList.innerHTML = coursePresets
+  const duration = state.courseFilters.duration;
+  const visiblePresets = duration
+    ? coursePresets.filter((c) => String(c.totalMinutes) === duration)
+    : coursePresets;
+  elements.coursePresetList.innerHTML = visiblePresets
     .map(
       (course) => `
         <button type="button" class="home-card course-preset-button" data-course-id="${course.id}">
@@ -2414,32 +2523,52 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "listening") {
-    const candidates = state.learningItems
+    const dbItems = state.dbReadingMaterials.slice(0, 1);
+    const localItems = state.learningItems
       .filter((item) => ["listening", "sentence"].includes(item.type))
       .slice(0, 5);
+    const hasDb = dbItems.length > 0;
+
+    const dbSection = hasDb
+      ? `<section class="section-card"><h4>DB教材（リスニング）</h4>${dbItems
+          .map(
+            (m) => `
+            <div class="tts-item-card">
+              <div>
+                <strong>${escapeHtml(m.title || "")}</strong>
+                <p class="muted">${escapeHtml(m.content || m.body || "")}</p>
+              </div>
+              <div class="mini-actions">
+                <button type="button" class="soft-button tts-db-item"
+                  data-text="${escapeHtml(m.content || m.body || m.title || "")}"
+                  data-lang="${escapeHtml(state.courseFilters.language)}">再生</button>
+              </div>
+            </div>`
+          )
+          .join("")}</section>`
+      : "";
+
+    const localSection = localItems.length
+      ? `<div class="tts-item-list">${localItems
+          .map(
+            (item) => `
+              <div class="tts-item-card">
+                <div>
+                  <strong>${escapeHtml(item.title || "")}</strong>
+                  <p class="muted">${escapeHtml(item.content || item.example || item.meaning || "")}</p>
+                </div>
+                <div class="mini-actions">
+                  <button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="1">再生</button>
+                </div>
+              </div>`
+          )
+          .join("")}</div>`
+      : (!hasDb ? "<p>listeningまたはsentenceタイプのLearningItemがまだありません。自由入力欄で読み上げを試せます。</p>" : "");
 
     elements.courseStepUi.innerHTML = `
       <div class="course-step-ui-grid">
-        <p>登録済みのlisteningまたはsentenceを聞く練習です。</p>
-        ${
-          candidates.length
-            ? `<div class="tts-item-list">${candidates
-                .map(
-                  (item) => `
-                    <div class="tts-item-card">
-                      <div>
-                        <strong>${escapeHtml(item.title || "")}</strong>
-                        <p class="muted">${escapeHtml(item.content || item.example || item.meaning || "")}</p>
-                      </div>
-                      <div class="mini-actions">
-                        <button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="1">再生</button>
-                      </div>
-                    </div>
-                  `
-                )
-                .join("")}</div>`
-            : "<p>listeningまたはsentenceタイプのLearningItemがまだありません。自由入力欄で読み上げを試せます。</p>"
-        }
+        ${dbSection}
+        ${localSection}
         <label>
           自由入力テキスト
           <textarea id="course-tts-text" rows="5" placeholder="読み上げたい文章を入力"></textarea>
@@ -2450,15 +2579,21 @@ function renderCourseStepUi(step) {
       </div>
     `;
     run.renderedStepIndex = run.currentStepIndex;
+    elements.courseStepUi.querySelectorAll(".tts-db-item").forEach((button) => {
+      button.addEventListener("click", () => {
+        const text = button.dataset.text;
+        const lang = languageToSpeechLang(button.dataset.lang);
+        setTtsText(text, button.dataset.lang);
+        speakText(text, { language: lang });
+      });
+    });
     elements.courseStepUi.querySelectorAll(".tts-course-item").forEach((button) => {
       button.addEventListener("click", () => {
         const item = state.learningItems.find((entry) => entry.id === button.dataset.id);
-        if (item) {
-          speakLearningItem(item, { rate: Number(button.dataset.rate || 1) });
-        }
+        if (item) speakLearningItem(item, { rate: Number(button.dataset.rate || 1) });
       });
     });
-    document.querySelector("#course-tts-play").addEventListener("click", () => {
+    document.querySelector("#course-tts-play")?.addEventListener("click", () => {
       const text = document.querySelector("#course-tts-text").value;
       setTtsText(text, elements.ttsLanguage.value);
       speakText(text);
@@ -2467,14 +2602,34 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "reading" || step.type === "grammar") {
-    const candidates = state.learningItems
+    const dbItems = state.dbReadingMaterials.slice(0, 3);
+    const localItems = state.learningItems
       .filter((item) => ["grammar", "sentence", "listening"].includes(item.type))
       .slice(0, 3);
-    elements.courseStepUi.innerHTML = candidates.length
-      ? `<div class="course-step-ui-grid">${candidates
+
+    const dbSection = dbItems.length
+      ? `<section class="section-card"><h4>DB教材</h4>${dbItems
+          .map(
+            (m) => `
+            <div>
+              <strong>${escapeHtml(m.title || "")}</strong>
+              ${m.cefr_level ? `<span class="eyebrow"> ${escapeHtml(m.cefr_level)}</span>` : ""}
+              <p class="muted">${escapeHtml(m.content || m.body || "")}</p>
+            </div>`
+          )
+          .join("")}</section>`
+      : "";
+
+    const localSection = localItems.length
+      ? `<div class="course-step-ui-grid">${localItems
           .map((item) => `<div><strong>${escapeHtml(item.title)}</strong><p class="muted">${escapeHtml(item.meaning || item.exampleTranslation || item.content || "")}</p></div>`)
           .join("")}</div>`
-      : "<p>登録済みのLearningItemから文法・例文・リスニング項目を確認してください。</p>";
+      : "";
+
+    elements.courseStepUi.innerHTML =
+      dbSection || localSection
+        ? dbSection + localSection
+        : "<p>登録済みのLearningItemから文法・例文・リスニング項目を確認してください。</p>";
     run.renderedStepIndex = run.currentStepIndex;
     return;
   }
@@ -3277,6 +3432,8 @@ elements.coursePresetList.addEventListener("click", (event) => {
     selectCourse(button.dataset.courseId);
   }
 });
+
+elements.courseFilterApply?.addEventListener("click", loadCourseMaterials);
 
 elements.courseConfirmBack.addEventListener("click", resetCourseToSelect);
 elements.courseStart.addEventListener("click", startCourse);

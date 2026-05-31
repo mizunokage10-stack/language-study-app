@@ -112,6 +112,46 @@
           </div>
 
           <section id="course-select-view" class="stack">
+            <section class="card stack" id="course-material-filter">
+              <h3>教材設定</h3>
+              <div class="filter-bar">
+                <label>
+                  言語
+                  <select id="course-filter-language">
+                    <option value="english">英語</option>
+                    <option value="chinese">中国語</option>
+                  </select>
+                </label>
+                <label>
+                  CEFRレベル
+                  <select id="course-filter-cefr">
+                    <option value="A1">A1</option>
+                    <option value="A2">A2</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="C1">C1</option>
+                  </select>
+                </label>
+                <label>
+                  領域
+                  <select id="course-filter-domain">
+                    <option value="">すべて</option>
+                  </select>
+                </label>
+                <label>
+                  学習時間
+                  <select id="course-filter-duration">
+                    <option value="">すべて</option>
+                    <option value="30">30分</option>
+                    <option value="60">60分</option>
+                    <option value="90">90分</option>
+                    <option value="120">120分</option>
+                  </select>
+                </label>
+              </div>
+              <div id="course-materials-message" class="auth-message"></div>
+              <button type="button" id="course-filter-apply">教材を読み込む</button>
+            </section>
             <div class="course-grid" id="course-preset-list"></div>
           </section>
 
