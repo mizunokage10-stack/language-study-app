@@ -21,6 +21,7 @@
           <button class="nav-button" data-page="course" type="button">学習タイマー</button>
           <button class="nav-button" data-page="audio" type="button">音声練習</button>
           <button class="nav-button" data-page="dictation" type="button">ディクテーション</button>
+          <button class="nav-button" data-page="recording" type="button">音読録音</button>
           <button class="nav-button" data-page="notebook" type="button">単語帳</button>
           <button class="nav-button" data-page="review" type="button">復習モード</button>
           <button class="nav-button" data-page="history" type="button">学習履歴</button>
@@ -82,6 +83,10 @@
             <button class="home-card" data-go="dictation" type="button">
               <strong>ディクテーション</strong>
               <span>音声を聞いて入力し、正解文との差分を確認</span>
+            </button>
+            <button class="home-card" data-go="recording" type="button">
+              <strong>音読録音</strong>
+              <span>お手本音声と自分の音読を聞き比べて自己評価</span>
             </button>
             <button class="home-card" data-go="notebook" type="button">
               <strong>単語帳</strong>
@@ -446,6 +451,18 @@
           </div>
           <section class="card stack">
             <div id="dictation-practice"></div>
+          </section>
+        </section>
+
+        <section class="page" id="page-recording">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Recording</p>
+              <h2>音読録音</h2>
+            </div>
+          </div>
+          <section class="card stack">
+            <div id="recording-practice"></div>
           </section>
         </section>
 

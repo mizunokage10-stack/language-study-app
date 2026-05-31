@@ -467,6 +467,48 @@ button[type="submit"],
   margin-top: 12px;
 }
 
+.recording-practice {
+  display: grid;
+  gap: 14px;
+}
+
+.recording-practice-text {
+  margin: 10px 0 0;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #dde6f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.recording-audio {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.recording-checklist {
+  display: grid;
+  gap: 10px;
+}
+
+.checkbox-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  font-weight: 600;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.recording-rating-actions {
+  margin-top: 12px;
+}
+
 .course-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

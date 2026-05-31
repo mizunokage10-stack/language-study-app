@@ -26,7 +26,11 @@ const state = {
   courseTimerId: null,
   ttsVoices: [],
   ttsRequestId: 0,
-  dictationSession: null
+  dictationSession: null,
+  recordingSession: null,
+  mediaRecorder: null,
+  recordingStream: null,
+  recordingChunks: []
 };
 
 const localStoreKeys = {
@@ -145,6 +149,7 @@ const elements = {
   ttsPause: document.querySelector("#tts-pause"),
   ttsResume: document.querySelector("#tts-resume"),
   dictationPractice: document.querySelector("#dictation-practice"),
+  recordingPractice: document.querySelector("#recording-practice"),
   authLoggedOut: document.querySelector("#auth-logged-out"),
   authLoggedIn: document.querySelector("#auth-logged-in"),
   authEmail: document.querySelector("#auth-email"),
@@ -661,6 +666,26 @@ function dictationRatingLabel(rating) {
   return labels[rating] || rating;
 }
 
+function practiceRatingToSrsOutcome(rating) {
+  const map = {
+    great: "easy",
+    normal: "normal",
+    hard: "hard",
+    retry: "forgot"
+  };
+  return map[rating] || "normal";
+}
+
+function practiceRatingLabel(rating) {
+  const labels = {
+    great: "よくできた",
+    normal: "普通",
+    hard: "難しかった",
+    retry: "やり直したい"
+  };
+  return labels[rating] || rating;
+}
+
 async function updateSrsAfterPractice(itemId, outcome) {
   try {
     return await srsRepository.updateSrsAfterReview(itemId, outcome);
@@ -671,6 +696,91 @@ async function updateSrsAfterPractice(itemId, outcome) {
 
     await createInitialSrsData(itemId);
     return srsRepository.updateSrsAfterReview(itemId, outcome);
+  }
+}
+
+function supportsMediaRecorder() {
+  return "MediaRecorder" in window && Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
+function recordingPracticeText(item) {
+  return [item?.content, item?.example, item?.title].find((value) => String(value || "").trim()) || "";
+}
+
+function recordingTargets(items = state.learningItems) {
+  return items.filter((item) => {
+    const hasPracticeText = Boolean(item.content || item.example);
+    if (!hasPracticeText) {
+      return false;
+    }
+
+    if (["sentence", "listening"].includes(item.type)) {
+      return true;
+    }
+
+    return ["vocabulary", "grammar"].includes(item.type) && Boolean(item.example);
+  });
+}
+
+function recordingChecklistForLanguage(language) {
+  if (language === "english") {
+    return [
+      "語尾まで発音できた",
+      "強く読む単語を意識できた",
+      "音のつながりを真似できた",
+      "r / l / th / v / f などを意識できた",
+      "日本語っぽい区切りにならなかった"
+    ];
+  }
+
+  if (language === "chinese") {
+    return ["声調を意識できた", "ピンイン通りに読めた", "軽声を意識できた", "そり舌音を意識できた", "文全体のリズムを真似できた"];
+  }
+
+  return ["聞き返して違和感を確認できた", "もう一度練習したい"];
+}
+
+function createRecordingSession(context = "standalone") {
+  return {
+    context,
+    queue: recordingTargets(),
+    index: 0,
+    status: "idle",
+    audioUrl: "",
+    completedCount: 0,
+    evaluated: false,
+    difficultItems: [],
+    checklist: [],
+    error: "",
+    complete: false
+  };
+}
+
+function currentRecordingEntry() {
+  if (!state.recordingSession) {
+    return null;
+  }
+
+  return state.recordingSession.queue[state.recordingSession.index] || null;
+}
+
+function releaseRecordingAudioUrl(session = state.recordingSession) {
+  if (session?.audioUrl) {
+    URL.revokeObjectURL(session.audioUrl);
+    session.audioUrl = "";
+  }
+}
+
+function stopRecordingTracks() {
+  state.recordingStream?.getTracks().forEach((track) => track.stop());
+  state.recordingStream = null;
+}
+
+function stopActiveRecording() {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+    state.mediaRecorder.stop();
+  } else {
+    stopRecordingTracks();
   }
 }
 
@@ -938,6 +1048,345 @@ async function submitDictationRating(rating, root) {
   }
 }
 
+function renderRecordingPractice(root = elements.recordingPractice, options = {}) {
+  if (!root) {
+    return;
+  }
+
+  const context = options.context || "standalone";
+  if (!state.recordingSession || state.recordingSession.context !== context || options.reset) {
+    releaseRecordingAudioUrl();
+    state.recordingSession = createRecordingSession(context);
+  }
+
+  const session = state.recordingSession;
+  const recorderSupported = supportsMediaRecorder();
+
+  if (!recorderSupported) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <p>このブラウザは録音に対応していません。</p>
+        <p class="muted">お手本音声の再生と練習文の確認はできますが、MediaRecorder APIが必要です。</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (!session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <p>音読録音の対象文がありません。</p>
+        <p class="muted">sentenceまたはlisteningタイプのcontent/example、またはvocabulary/grammarのexampleを登録してください。</p>
+        <button type="button" class="soft-button recording-reload">再読み込み</button>
+      </div>
+    `;
+    attachRecordingEvents(root);
+    return;
+  }
+
+  if (session.complete || session.index >= session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <h3>音読録音完了</h3>
+        <p>今回録音した回数: ${escapeHtml(String(session.completedCount))}</p>
+        ${
+          session.difficultItems.length
+            ? `<h4>難しかった項目</h4><ul class="mistake-list">${session.difficultItems
+                .map((item) => `<li>${escapeHtml(item.title || "")}（${escapeHtml(learningItemTypeLabel(item.type))}）</li>`)
+                .join("")}</ul>`
+            : "<p>難しい項目はありませんでした。</p>"
+        }
+        <button type="button" class="soft-button recording-restart">もう一度練習</button>
+      </div>
+    `;
+    attachRecordingEvents(root);
+    return;
+  }
+
+  const item = currentRecordingEntry();
+  const practiceText = recordingPracticeText(item);
+  const checklist = recordingChecklistForLanguage(item.language);
+  const rateOptions = [
+    ["0.75", "0.75倍"],
+    ["1", "1.0倍"],
+    ["1.25", "1.25倍"]
+  ];
+
+  root.innerHTML = `
+    <div class="recording-practice">
+      <div class="review-toolbar">
+        <div class="review-stat">
+          <span>音読録音対象</span>
+          <strong>${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+        <div class="review-stat">
+          <span>現在の文</span>
+          <strong>${escapeHtml(String(session.index + 1))} / ${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+        <div class="review-stat">
+          <span>録音回数</span>
+          <strong>${escapeHtml(String(session.completedCount))}</strong>
+        </div>
+      </div>
+      ${session.error ? `<p class="auth-message auth-message--error">${escapeHtml(session.error)}</p>` : ""}
+      <section class="section-card">
+        <p class="eyebrow">${escapeHtml(learningItemTypeLabel(item.type))} / ${escapeHtml(languageLabel(item.language))}</p>
+        <h3>${escapeHtml(item.title || "音読練習")}</h3>
+        <p class="recording-practice-text">${escapeHtml(practiceText)}</p>
+        <div class="field-row">
+          <label>
+            お手本速度
+            <select class="recording-rate">
+              ${rateOptions.map(([value, label]) => `<option value="${value}" ${value === "1" ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+          </label>
+          <div class="dictation-audio-actions">
+            <button type="button" class="soft-button recording-model-play">お手本音声再生</button>
+          </div>
+        </div>
+      </section>
+      <section class="section-card">
+        <h4>自分の音読</h4>
+        <p class="muted">${
+          session.status === "recording"
+            ? "録音中です。読み終えたら停止してください。"
+            : session.audioUrl
+              ? "録音を聞き返して、お手本と比べてください。"
+              : "マイク許可後、音読を録音できます。"
+        }</p>
+        <div class="mini-actions">
+          <button type="button" class="soft-button recording-start" ${session.status === "recording" ? "disabled" : ""}>録音開始</button>
+          <button type="button" class="soft-button recording-stop" ${session.status === "recording" ? "" : "disabled"}>録音停止</button>
+          <button type="button" class="soft-button recording-replay" ${session.audioUrl ? "" : "disabled"}>自分の録音を再生</button>
+          <button type="button" class="soft-button recording-retake" ${session.audioUrl || session.status === "recording" ? "" : "disabled"}>録音やり直し</button>
+        </div>
+        ${session.audioUrl ? `<audio class="recording-audio" controls src="${escapeHtml(session.audioUrl)}"></audio>` : ""}
+      </section>
+      <section class="section-card">
+        <h4>自己評価チェック</h4>
+        <div class="recording-checklist">
+          ${checklist
+            .map(
+              (label) => `
+                <label class="checkbox-row">
+                  <input type="checkbox" class="recording-check" value="${escapeHtml(label)}" ${session.checklist.includes(label) ? "checked" : ""} />
+                  <span>${escapeHtml(label)}</span>
+                </label>
+              `
+            )
+            .join("")}
+        </div>
+        <div class="mini-actions recording-rating-actions">
+          <button type="button" class="review-rating-button recording-rate-button" data-rating="great" ${session.evaluated ? "disabled" : ""}>よくできた</button>
+          <button type="button" class="review-rating-button recording-rate-button" data-rating="normal" ${session.evaluated ? "disabled" : ""}>普通</button>
+          <button type="button" class="review-rating-button soft-button recording-rate-button" data-rating="hard" ${session.evaluated ? "disabled" : ""}>難しかった</button>
+          <button type="button" class="review-rating-button soft-button recording-rate-button" data-rating="retry" ${session.evaluated ? "disabled" : ""}>やり直したい</button>
+        </div>
+      </section>
+      <div class="mini-actions">
+        <button type="button" class="soft-button recording-next" ${session.evaluated ? "" : "disabled"}>次の文へ</button>
+        <button type="button" class="soft-button recording-end">終了</button>
+      </div>
+    </div>
+  `;
+
+  attachRecordingEvents(root);
+}
+
+function attachRecordingEvents(root) {
+  root.querySelector(".recording-reload")?.addEventListener("click", async () => {
+    await loadLearningItems();
+    renderRecordingPractice(root, { context: state.recordingSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".recording-restart")?.addEventListener("click", () => {
+    renderRecordingPractice(root, { context: state.recordingSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".recording-model-play")?.addEventListener("click", () => {
+    const item = currentRecordingEntry();
+    if (!item) {
+      return;
+    }
+    const text = recordingPracticeText(item);
+    const rate = Number(root.querySelector(".recording-rate")?.value || 1);
+    setTtsText(text, item.language);
+    speakText(text, { language: languageToSpeechLang(item.language), rate });
+  });
+
+  root.querySelector(".recording-start")?.addEventListener("click", async () => {
+    await startRecordingPractice(root);
+  });
+
+  root.querySelector(".recording-stop")?.addEventListener("click", () => {
+    stopActiveRecording();
+  });
+
+  root.querySelector(".recording-replay")?.addEventListener("click", () => {
+    const session = state.recordingSession;
+    if (!session?.audioUrl) {
+      setStatus("再生できる録音がありません。");
+      return;
+    }
+    const audio = new Audio(session.audioUrl);
+    audio.play().catch(() => setStatus("録音の再生に失敗しました。"));
+  });
+
+  root.querySelector(".recording-retake")?.addEventListener("click", () => {
+    stopActiveRecording();
+    if (state.recordingSession) {
+      releaseRecordingAudioUrl(state.recordingSession);
+      state.recordingSession.status = "idle";
+      state.recordingSession.evaluated = false;
+      state.recordingSession.error = "";
+      renderRecordingPractice(root, { context: state.recordingSession.context });
+    }
+  });
+
+  root.querySelectorAll(".recording-check").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      if (!state.recordingSession) {
+        return;
+      }
+      const checked = [...root.querySelectorAll(".recording-check:checked")].map((input) => input.value);
+      state.recordingSession.checklist = checked;
+    });
+  });
+
+  root.querySelectorAll(".recording-rate-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await submitRecordingRating(button.dataset.rating, root);
+    });
+  });
+
+  root.querySelector(".recording-next")?.addEventListener("click", () => {
+    if (!state.recordingSession) {
+      return;
+    }
+    releaseRecordingAudioUrl(state.recordingSession);
+    state.recordingSession.index += 1;
+    state.recordingSession.status = "idle";
+    state.recordingSession.audioUrl = "";
+    state.recordingSession.evaluated = false;
+    state.recordingSession.checklist = [];
+    state.recordingSession.error = "";
+    renderRecordingPractice(root, { context: state.recordingSession.context });
+  });
+
+  root.querySelector(".recording-end")?.addEventListener("click", () => {
+    if (!state.recordingSession) {
+      return;
+    }
+    stopActiveRecording();
+    state.recordingSession.complete = true;
+    renderRecordingPractice(root, { context: state.recordingSession.context });
+  });
+}
+
+async function startRecordingPractice(root) {
+  const session = state.recordingSession;
+  if (!session) {
+    return;
+  }
+
+  if (!supportsMediaRecorder()) {
+    session.error = "このブラウザは録音に対応していません。";
+    renderRecordingPractice(root, { context: session.context });
+    return;
+  }
+
+  try {
+    stopActiveRecording();
+    releaseRecordingAudioUrl(session);
+    state.recordingChunks = [];
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    state.recordingStream = stream;
+    state.mediaRecorder = recorder;
+
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data?.size) {
+        state.recordingChunks.push(event.data);
+      }
+    });
+
+    recorder.addEventListener("stop", () => {
+      const mimeType = state.recordingChunks[0]?.type || "audio/webm";
+      const blob = new Blob(state.recordingChunks, { type: mimeType });
+      releaseRecordingAudioUrl(session);
+      session.audioUrl = URL.createObjectURL(blob);
+      session.status = "recorded";
+      session.evaluated = false;
+      session.completedCount += 1;
+      session.error = "";
+
+      if (session.context === "course" && state.courseRun) {
+        state.courseRun.recordingCount += 1;
+      }
+
+      stopRecordingTracks();
+      state.mediaRecorder = null;
+      state.recordingChunks = [];
+      renderRecordingPractice(root, { context: session.context });
+      setStatus("録音を保存しました。ブラウザ内の一時データとして再生できます。");
+    });
+
+    recorder.start();
+    session.status = "recording";
+    session.error = "";
+    renderRecordingPractice(root, { context: session.context });
+    setStatus("録音を開始しました。");
+  } catch (error) {
+    session.status = "idle";
+    session.error = error.name === "NotAllowedError" ? "マイク権限が拒否されました。ブラウザの権限設定を確認してください。" : "録音を開始できませんでした。";
+    stopRecordingTracks();
+    state.mediaRecorder = null;
+    renderRecordingPractice(root, { context: session.context });
+  }
+}
+
+async function submitRecordingRating(rating, root) {
+  const session = state.recordingSession;
+  const item = currentRecordingEntry();
+
+  if (!session || !item) {
+    setStatus("音読録音の対象がありません。");
+    return;
+  }
+
+  if (!session.audioUrl) {
+    session.error = "先に録音してください。";
+    renderRecordingPractice(root, { context: session.context });
+    return;
+  }
+
+  await withBusy(async () => {
+    const outcome = practiceRatingToSrsOutcome(rating);
+    await updateSrsAfterPractice(item.id, outcome);
+    session.evaluated = true;
+
+    if (session.context === "course" && state.courseRun) {
+      state.courseRun.reviewedItemIds = uniqueValues([...state.courseRun.reviewedItemIds, item.id]);
+      if (outcome === "hard" || outcome === "forgot") {
+        state.courseRun.mistakeItemIds = uniqueValues([...state.courseRun.mistakeItemIds, item.id]);
+      }
+    }
+
+    if (outcome === "hard" || outcome === "forgot") {
+      session.difficultItems.push(item);
+    }
+
+    session.error = "";
+    renderRecordingPractice(root, { context: session.context });
+    setStatus(`音読録音の自己評価を保存しました: ${practiceRatingLabel(rating)}`);
+  }, "音読録音の自己評価を保存しています...");
+
+  if (state.recordingSession && !state.recordingSession.evaluated) {
+    state.recordingSession.error = "SRS更新に失敗しました。ネットワークまたは保存先を確認してください。";
+    renderRecordingPractice(root, { context: state.recordingSession.context });
+  }
+}
+
 function pauseSpeech() {
   if (supportsSpeechSynthesis() && window.speechSynthesis.speaking) {
     window.speechSynthesis.pause();
@@ -992,6 +1441,10 @@ function modeLabel(mode) {
 }
 
 function switchPage(pageId) {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive" && !["recording", "course"].includes(pageId)) {
+    stopActiveRecording();
+  }
+
   state.currentPage = pageId;
 
   elements.navButtons.forEach((button) => {
@@ -1029,6 +1482,10 @@ function switchPage(pageId) {
 
   if (pageId === "dictation") {
     loadDictationPractice();
+  }
+
+  if (pageId === "recording") {
+    loadRecordingPractice();
   }
 }
 
@@ -1531,6 +1988,20 @@ async function loadDictationPractice() {
   }
 }
 
+async function loadRecordingPractice() {
+  try {
+    const data = await learningItemsRepository.getLearningItems();
+    state.learningItems = data.items || [];
+    renderRecordingPractice(elements.recordingPractice, { context: "standalone", reset: true });
+    setStatus("音読録音の対象を読み込みました。");
+  } catch (error) {
+    if (elements.recordingPractice) {
+      elements.recordingPractice.innerHTML = `<p class="auth-message auth-message--error">${escapeHtml(error.message || "音読録音の対象読み込みに失敗しました。")}</p>`;
+    }
+    setStatus(error.message || "音読録音の対象読み込みに失敗しました。");
+  }
+}
+
 function renderLearningItemTable() {
   if (state.learningItems.length === 0) {
     elements.learningItemTableBody.innerHTML = `
@@ -1790,9 +2261,6 @@ function markCourseStepDone(collectionName) {
 function completeCurrentCourseStep() {
   markCourseStepDone("completedSteps");
   const step = currentCourseStep();
-  if (step?.type === "recording") {
-    state.courseRun.recordingCount += 1;
-  }
   syncCourseTextInputs();
 }
 
@@ -1934,20 +2402,25 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "recording") {
-    elements.courseStepUi.innerHTML = "<p>本文や例文を声に出して読みます。録音機能は今後MediaRecorderに接続します。</p>";
     run.renderedStepIndex = run.currentStepIndex;
+    renderRecordingPractice(elements.courseStepUi, { context: "course", reset: true });
     return;
   }
 
-  if (step.type === "listening" || step.type === "shadowing") {
+  if (step.type === "shadowing") {
+    run.renderedStepIndex = run.currentStepIndex;
+    renderRecordingPractice(elements.courseStepUi, { context: "course", reset: true });
+    return;
+  }
+
+  if (step.type === "listening") {
     const candidates = state.learningItems
       .filter((item) => ["listening", "sentence"].includes(item.type))
       .slice(0, 5);
-    const isShadowing = step.type === "shadowing";
 
     elements.courseStepUi.innerHTML = `
       <div class="course-step-ui-grid">
-        <p>${isShadowing ? "お手本音声を再生し、少し遅めの速度でもシャドーイングできます。" : "登録済みのlisteningまたはsentenceを聞く練習です。"}</p>
+        <p>登録済みのlisteningまたはsentenceを聞く練習です。</p>
         ${
           candidates.length
             ? `<div class="tts-item-list">${candidates
@@ -1960,11 +2433,6 @@ function renderCourseStepUi(step) {
                       </div>
                       <div class="mini-actions">
                         <button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="1">再生</button>
-                        ${
-                          isShadowing
-                            ? `<button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="0.75">0.75倍</button>`
-                            : ""
-                        }
                       </div>
                     </div>
                   `
@@ -1978,7 +2446,6 @@ function renderCourseStepUi(step) {
         </label>
         <div class="mini-actions">
           <button type="button" id="course-tts-play" class="soft-button">再生</button>
-          ${isShadowing ? `<button type="button" id="course-tts-slow" class="soft-button">0.75倍</button>` : ""}
         </div>
       </div>
     `;
@@ -1996,14 +2463,6 @@ function renderCourseStepUi(step) {
       setTtsText(text, elements.ttsLanguage.value);
       speakText(text);
     });
-    const slowButton = document.querySelector("#course-tts-slow");
-    if (slowButton) {
-      slowButton.addEventListener("click", () => {
-        const text = document.querySelector("#course-tts-text").value;
-        setTtsText(text, elements.ttsLanguage.value);
-        speakText(text, { rate: 0.75 });
-      });
-    }
     return;
   }
 
@@ -2077,6 +2536,7 @@ function renderCourseSummary() {
       <div class="course-summary-item"><span>復習項目</span><strong>${escapeHtml(String(payload.reviewedItemIds.length))}</strong></div>
       <div class="course-summary-item"><span>難しい/忘れた</span><strong>${escapeHtml(String(payload.mistakeItemIds.length))}</strong></div>
       <div class="course-summary-item"><span>ディクテーション</span><strong>${escapeHtml(String(payload.dictationCount))}</strong></div>
+      <div class="course-summary-item"><span>録音回数</span><strong>${escapeHtml(String(payload.recordingCount))}</strong></div>
     </div>
     <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
     <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>
@@ -2939,6 +3399,7 @@ elements.ttsPause.addEventListener("click", pauseSpeech);
 elements.ttsResume.addEventListener("click", resumeSpeech);
 
 window.addEventListener("beforeunload", (event) => {
+  stopActiveRecording();
   if (state.courseRun && !state.courseRun.isComplete && !state.courseRun.saved) {
     event.preventDefault();
     event.returnValue = "";
