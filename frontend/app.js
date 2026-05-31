@@ -23,7 +23,9 @@ const state = {
   difficultReviewItems: [],
   selectedCourse: null,
   courseRun: null,
-  courseTimerId: null
+  courseTimerId: null,
+  ttsVoices: [],
+  ttsRequestId: 0
 };
 
 const localStoreKeys = {
@@ -57,6 +59,7 @@ const elements = {
   learningItemNote: document.querySelector("#learning-item-note"),
   learningItemTags: document.querySelector("#learning-item-tags"),
   newLearningItem: document.querySelector("#new-learning-item"),
+  speakLearningItem: document.querySelector("#speak-learning-item"),
   deleteLearningItem: document.querySelector("#delete-learning-item"),
   coursePresetList: document.querySelector("#course-preset-list"),
   courseSelectView: document.querySelector("#course-select-view"),
@@ -128,6 +131,18 @@ const elements = {
   reviewHard: document.querySelector("#review-hard"),
   reviewForgot: document.querySelector("#review-forgot"),
   reviewComplete: document.querySelector("#review-complete"),
+  ttsSupportMessage: document.querySelector("#tts-support-message"),
+  ttsText: document.querySelector("#tts-text"),
+  ttsLanguage: document.querySelector("#tts-language"),
+  ttsVoice: document.querySelector("#tts-voice"),
+  ttsRate: document.querySelector("#tts-rate"),
+  ttsRateValue: document.querySelector("#tts-rate-value"),
+  ttsPitch: document.querySelector("#tts-pitch"),
+  ttsPitchValue: document.querySelector("#tts-pitch-value"),
+  ttsPlay: document.querySelector("#tts-play"),
+  ttsStop: document.querySelector("#tts-stop"),
+  ttsPause: document.querySelector("#tts-pause"),
+  ttsResume: document.querySelector("#tts-resume"),
   authLoggedOut: document.querySelector("#auth-logged-out"),
   authLoggedIn: document.querySelector("#auth-logged-in"),
   authEmail: document.querySelector("#auth-email"),
@@ -404,6 +419,219 @@ function learningItemTypeLabel(type) {
   return labels[type] || type;
 }
 
+function supportsSpeechSynthesis() {
+  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function languageToSpeechLang(language) {
+  const normalized = String(language || "").toLowerCase();
+  if (normalized.startsWith("en") || normalized === "english") {
+    return "en-US";
+  }
+  if (normalized.startsWith("zh") || normalized === "chinese") {
+    return "zh-CN";
+  }
+  if (normalized.startsWith("ja") || normalized === "japanese") {
+    return "ja-JP";
+  }
+  return "";
+}
+
+function learningItemSpeechText(item) {
+  return [item?.content, item?.example, item?.title].find((value) => String(value || "").trim()) || "";
+}
+
+function setTtsMessage(message, isError = false) {
+  if (!elements.ttsSupportMessage) {
+    return;
+  }
+
+  elements.ttsSupportMessage.textContent = message;
+  elements.ttsSupportMessage.classList.toggle("auth-message--error", isError);
+}
+
+function voiceLanguageScore(voice, language) {
+  if (!language) {
+    return voice.default ? 0 : 1;
+  }
+
+  const voiceLang = String(voice.lang || "").toLowerCase();
+  const requested = language.toLowerCase();
+  const base = requested.split("-")[0];
+
+  if (voiceLang === requested) {
+    return 0;
+  }
+  if (voiceLang.startsWith(base)) {
+    return 1;
+  }
+  if (voice.default) {
+    return 2;
+  }
+  return 3;
+}
+
+function renderTtsVoiceOptions() {
+  if (!elements.ttsVoice) {
+    return;
+  }
+
+  const selectedLanguage = elements.ttsLanguage.value;
+  const currentVoice = elements.ttsVoice.value;
+  const voices = [...state.ttsVoices].sort((a, b) => {
+    const scoreDiff = voiceLanguageScore(a, selectedLanguage) - voiceLanguageScore(b, selectedLanguage);
+    return scoreDiff || a.name.localeCompare(b.name);
+  });
+
+  elements.ttsVoice.innerHTML = `
+    <option value="">ブラウザの自動選択</option>
+    ${voices
+      .map(
+        (voice) =>
+          `<option value="${escapeHtml(voice.voiceURI)}">${escapeHtml(voice.name)} (${escapeHtml(voice.lang || "unknown")})${voice.default ? " / default" : ""}</option>`
+      )
+      .join("")}
+  `;
+
+  if (voices.some((voice) => voice.voiceURI === currentVoice)) {
+    elements.ttsVoice.value = currentVoice;
+  }
+
+  if (!voices.length) {
+    setTtsMessage("利用可能な音声をまだ取得できていません。ブラウザが読み込み次第、一覧を更新します。");
+  } else {
+    setTtsMessage("読み上げの準備ができています。");
+  }
+}
+
+function loadTtsVoices() {
+  if (!supportsSpeechSynthesis()) {
+    setTtsMessage("このブラウザは音声読み上げに対応していません。", true);
+    return;
+  }
+
+  state.ttsVoices = window.speechSynthesis.getVoices() || [];
+  renderTtsVoiceOptions();
+}
+
+function selectedTtsVoice() {
+  return state.ttsVoices.find((voice) => voice.voiceURI === elements.ttsVoice.value) || null;
+}
+
+function updateTtsSliderLabels() {
+  elements.ttsRateValue.textContent = Number(elements.ttsRate.value).toFixed(2);
+  elements.ttsPitchValue.textContent = Number(elements.ttsPitch.value).toFixed(2);
+}
+
+function setTtsText(text, language = "") {
+  elements.ttsText.value = text || "";
+  elements.ttsLanguage.value = languageToSpeechLang(language);
+  renderTtsVoiceOptions();
+}
+
+function speakText(text, options = {}) {
+  if (!supportsSpeechSynthesis()) {
+    setTtsMessage("このブラウザは音声読み上げに対応していません。", true);
+    setStatus("このブラウザは音声読み上げに対応していません。");
+    return false;
+  }
+
+  const value = String(text || elements.ttsText.value || "").trim();
+  if (!value) {
+    setTtsMessage("読み上げるテキストを入力してください。", true);
+    setStatus("読み上げるテキストを入力してください。");
+    return false;
+  }
+
+  state.ttsRequestId += 1;
+  const requestId = state.ttsRequestId;
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(value);
+  const language = options.language || elements.ttsLanguage.value;
+  const voice = options.voice || selectedTtsVoice();
+
+  if (language) {
+    utterance.lang = language;
+  }
+  if (voice) {
+    utterance.voice = voice;
+  }
+
+  utterance.rate = Number(options.rate ?? elements.ttsRate.value ?? 1);
+  utterance.pitch = Number(options.pitch ?? elements.ttsPitch.value ?? 1);
+  utterance.onend = () => {
+    if (requestId !== state.ttsRequestId) {
+      return;
+    }
+    setTtsMessage("読み上げが完了しました。");
+    setStatus("読み上げが完了しました。");
+  };
+  utterance.onerror = (event) => {
+    if (requestId !== state.ttsRequestId || ["canceled", "interrupted"].includes(event.error)) {
+      return;
+    }
+    setTtsMessage("読み上げ中にエラーが発生しました。別の音声を選んで試してください。", true);
+    setStatus("読み上げ中にエラーが発生しました。");
+  };
+
+  window.speechSynthesis.speak(utterance);
+  setTtsMessage("読み上げ中です。");
+  setStatus("読み上げ中です。");
+  return true;
+}
+
+function speakLearningItem(item, options = {}) {
+  const text = learningItemSpeechText(item);
+  const language = languageToSpeechLang(item?.language);
+  setTtsText(text, language);
+  return speakText(text, { language, ...options });
+}
+
+function pauseSpeech() {
+  if (supportsSpeechSynthesis() && window.speechSynthesis.speaking) {
+    window.speechSynthesis.pause();
+    setTtsMessage("読み上げを一時停止しました。");
+    setStatus("読み上げを一時停止しました。");
+  }
+}
+
+function resumeSpeech() {
+  if (supportsSpeechSynthesis()) {
+    window.speechSynthesis.resume();
+    setTtsMessage("読み上げを再開しました。");
+    setStatus("読み上げを再開しました。");
+  }
+}
+
+function stopSpeech() {
+  if (supportsSpeechSynthesis()) {
+    state.ttsRequestId += 1;
+    window.speechSynthesis.cancel();
+    setTtsMessage("読み上げを停止しました。");
+    setStatus("読み上げを停止しました。");
+  }
+}
+
+function initTextToSpeech() {
+  if (!supportsSpeechSynthesis()) {
+    [elements.ttsPlay, elements.ttsStop, elements.ttsPause, elements.ttsResume].forEach((button) => {
+      button.disabled = true;
+    });
+    setTtsMessage("このブラウザは音声読み上げに対応していません。", true);
+    return;
+  }
+
+  updateTtsSliderLabels();
+  loadTtsVoices();
+
+  if ("addEventListener" in window.speechSynthesis) {
+    window.speechSynthesis.addEventListener("voiceschanged", loadTtsVoices);
+  } else {
+    window.speechSynthesis.onvoiceschanged = loadTtsVoices;
+  }
+}
+
 function modeLabel(mode) {
   const labels = {
     manual_vocabulary: "単語登録",
@@ -445,6 +673,9 @@ function switchPage(pageId) {
     loadLearningItems();
   }
 
+  if (pageId === "audio") {
+    loadTtsVoices();
+  }
 }
 
 async function fetchJson(url, options = {}) {
@@ -956,6 +1187,7 @@ function renderLearningItemTable() {
           <td>
             <div class="table-actions">
               <button type="button" class="soft-button learning-item-view" data-id="${item.id}">編集</button>
+              <button type="button" class="soft-button learning-item-speak" data-id="${item.id}">読み上げ</button>
               <button type="button" class="soft-button learning-item-delete" data-id="${item.id}">削除</button>
             </div>
           </td>
@@ -1333,11 +1565,23 @@ function renderCourseStepUi(step) {
   if (step.type === "dictation") {
     elements.courseStepUi.innerHTML = `
       <div class="course-step-ui-grid">
-        <p>聞き取った内容を書き取ります。音声再生は今後接続します。</p>
+        <p>読み上げ音声を聞き取り、内容を書き取ります。</p>
+        <label>
+          読み上げる文章
+          <textarea id="course-dictation-tts-text" rows="4" placeholder="読み上げたい文章を入力"></textarea>
+        </label>
+        <div class="mini-actions">
+          <button type="button" id="course-dictation-tts-play" class="soft-button">読み上げ</button>
+        </div>
         <textarea rows="5" placeholder="聞き取った内容を入力"></textarea>
       </div>
     `;
     run.renderedStepIndex = run.currentStepIndex;
+    document.querySelector("#course-dictation-tts-play").addEventListener("click", () => {
+      const text = document.querySelector("#course-dictation-tts-text").value;
+      setTtsText(text, elements.ttsLanguage.value);
+      speakText(text);
+    });
     return;
   }
 
@@ -1348,8 +1592,70 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "listening" || step.type === "shadowing") {
-    elements.courseStepUi.innerHTML = "<p>登録済みのlisteningまたはsentenceを聞く練習です。音声再生機能は今後接続します。</p>";
+    const candidates = state.learningItems
+      .filter((item) => ["listening", "sentence"].includes(item.type))
+      .slice(0, 5);
+    const isShadowing = step.type === "shadowing";
+
+    elements.courseStepUi.innerHTML = `
+      <div class="course-step-ui-grid">
+        <p>${isShadowing ? "お手本音声を再生し、少し遅めの速度でもシャドーイングできます。" : "登録済みのlisteningまたはsentenceを聞く練習です。"}</p>
+        ${
+          candidates.length
+            ? `<div class="tts-item-list">${candidates
+                .map(
+                  (item) => `
+                    <div class="tts-item-card">
+                      <div>
+                        <strong>${escapeHtml(item.title || "")}</strong>
+                        <p class="muted">${escapeHtml(item.content || item.example || item.meaning || "")}</p>
+                      </div>
+                      <div class="mini-actions">
+                        <button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="1">再生</button>
+                        ${
+                          isShadowing
+                            ? `<button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="0.75">0.75倍</button>`
+                            : ""
+                        }
+                      </div>
+                    </div>
+                  `
+                )
+                .join("")}</div>`
+            : "<p>listeningまたはsentenceタイプのLearningItemがまだありません。自由入力欄で読み上げを試せます。</p>"
+        }
+        <label>
+          自由入力テキスト
+          <textarea id="course-tts-text" rows="5" placeholder="読み上げたい文章を入力"></textarea>
+        </label>
+        <div class="mini-actions">
+          <button type="button" id="course-tts-play" class="soft-button">再生</button>
+          ${isShadowing ? `<button type="button" id="course-tts-slow" class="soft-button">0.75倍</button>` : ""}
+        </div>
+      </div>
+    `;
     run.renderedStepIndex = run.currentStepIndex;
+    elements.courseStepUi.querySelectorAll(".tts-course-item").forEach((button) => {
+      button.addEventListener("click", () => {
+        const item = state.learningItems.find((entry) => entry.id === button.dataset.id);
+        if (item) {
+          speakLearningItem(item, { rate: Number(button.dataset.rate || 1) });
+        }
+      });
+    });
+    document.querySelector("#course-tts-play").addEventListener("click", () => {
+      const text = document.querySelector("#course-tts-text").value;
+      setTtsText(text, elements.ttsLanguage.value);
+      speakText(text);
+    });
+    const slowButton = document.querySelector("#course-tts-slow");
+    if (slowButton) {
+      slowButton.addEventListener("click", () => {
+        const text = document.querySelector("#course-tts-text").value;
+        setTtsText(text, elements.ttsLanguage.value);
+        speakText(text, { rate: 0.75 });
+      });
+    }
     return;
   }
 
@@ -1982,8 +2288,16 @@ function renderReviewAnswer(item) {
     .filter(([, value]) => value)
     .map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`)
     .join("");
+  const speechText = learningItemSpeechText(item);
+  const speechButton = speechText
+    ? `
+      <div class="mini-actions tts-inline-actions">
+        <button type="button" class="soft-button tts-review-current">答えを読み上げ</button>
+      </div>
+    `
+    : "";
 
-  elements.reviewAnswerArea.innerHTML = rows ? `<dl>${rows}</dl>` : "<p>表示できる答えがありません。</p>";
+  elements.reviewAnswerArea.innerHTML = `${rows ? `<dl>${rows}</dl>` : "<p>表示できる答えがありません。</p>"}${speechButton}`;
   elements.reviewAnswerArea.classList.toggle("hidden", !state.reviewRevealed);
 }
 
@@ -2111,6 +2425,11 @@ elements.homeButtons.forEach((button) => {
 elements.learningItemSearch.addEventListener("click", loadLearningItems);
 elements.learningItemForm.addEventListener("submit", saveLearningItem);
 elements.newLearningItem.addEventListener("click", resetLearningItemForm);
+elements.speakLearningItem.addEventListener("click", () => {
+  const selectedItem = state.learningItems.find((entry) => entry.id === state.selectedLearningItemId);
+  const draftItem = selectedItem || buildLearningItemPayload();
+  speakLearningItem(draftItem);
+});
 elements.deleteLearningItem.addEventListener("click", async () => {
   const id = elements.learningItemId.value;
   if (!id) {
@@ -2128,6 +2447,13 @@ elements.learningItemTableBody.addEventListener("click", async (event) => {
     const item = state.learningItems.find((entry) => entry.id === target.dataset.id);
     if (item) {
       fillLearningItemForm(item);
+    }
+  }
+
+  if (target.classList.contains("learning-item-speak")) {
+    const item = state.learningItems.find((entry) => entry.id === target.dataset.id);
+    if (item) {
+      speakLearningItem(item);
     }
   }
 
@@ -2234,6 +2560,14 @@ elements.studyLogTableBody.addEventListener("click", async (event) => {
 
 elements.loadReviewCard.addEventListener("click", loadReviewItems);
 elements.revealReviewAnswer.addEventListener("click", revealReviewAnswer);
+elements.reviewAnswerArea.addEventListener("click", (event) => {
+  if (event.target.classList.contains("tts-review-current")) {
+    const entry = currentReviewEntry();
+    if (entry) {
+      speakLearningItem(entry.item);
+    }
+  }
+});
 elements.reviewEasy.addEventListener("click", async () => {
   await submitReview("easy");
 });
@@ -2247,6 +2581,14 @@ elements.reviewForgot.addEventListener("click", async () => {
   await submitReview("forgot");
 });
 
+elements.ttsLanguage.addEventListener("change", renderTtsVoiceOptions);
+elements.ttsRate.addEventListener("input", updateTtsSliderLabels);
+elements.ttsPitch.addEventListener("input", updateTtsSliderLabels);
+elements.ttsPlay.addEventListener("click", () => speakText());
+elements.ttsStop.addEventListener("click", stopSpeech);
+elements.ttsPause.addEventListener("click", pauseSpeech);
+elements.ttsResume.addEventListener("click", resumeSpeech);
+
 window.addEventListener("beforeunload", (event) => {
   if (state.courseRun && !state.courseRun.isComplete && !state.courseRun.saved) {
     event.preventDefault();
@@ -2258,4 +2600,5 @@ clearHistoryDetail();
 renderReviewCard();
 renderCoursePresetList();
 setStatus("準備完了");
+initTextToSpeech();
 initAuth();
