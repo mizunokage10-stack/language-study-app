@@ -412,6 +412,61 @@ button[type="submit"],
   justify-content: flex-end;
 }
 
+.dictation-practice {
+  display: grid;
+  gap: 14px;
+}
+
+.dictation-audio-actions {
+  display: flex;
+  align-items: end;
+}
+
+.dictation-diff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dictation-token {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border-radius: 8px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  font-weight: 700;
+}
+
+.dictation-token--match {
+  background: #e8f7ee;
+  border-color: #b7dfc6;
+  color: #166534;
+}
+
+.dictation-token--missing {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.dictation-token--extra {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #3730a3;
+}
+
+.dictation-token--different {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.dictation-rating-actions {
+  margin-top: 12px;
+}
+
 .course-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

@@ -25,7 +25,8 @@ const state = {
   courseRun: null,
   courseTimerId: null,
   ttsVoices: [],
-  ttsRequestId: 0
+  ttsRequestId: 0,
+  dictationSession: null
 };
 
 const localStoreKeys = {
@@ -143,6 +144,7 @@ const elements = {
   ttsStop: document.querySelector("#tts-stop"),
   ttsPause: document.querySelector("#tts-pause"),
   ttsResume: document.querySelector("#tts-resume"),
+  dictationPractice: document.querySelector("#dictation-practice"),
   authLoggedOut: document.querySelector("#auth-logged-out"),
   authLoggedIn: document.querySelector("#auth-logged-in"),
   authEmail: document.querySelector("#auth-email"),
@@ -588,6 +590,354 @@ function speakLearningItem(item, options = {}) {
   return speakText(text, { language, ...options });
 }
 
+function dictationAnswerText(item) {
+  return [item?.content, item?.example].find((value) => String(value || "").trim()) || "";
+}
+
+function dictationTargets(items = state.learningItems) {
+  return items.filter((item) => ["sentence", "listening"].includes(item.type) && dictationAnswerText(item));
+}
+
+function tokenizeDictationText(text, language) {
+  const value = String(text || "").trim();
+  if (!value) {
+    return [];
+  }
+
+  if (language === "chinese" || language === "japanese") {
+    return Array.from(value.replace(/\s+/g, ""));
+  }
+
+  return value.split(/\s+/).filter(Boolean);
+}
+
+function normalizeDictationToken(token) {
+  return String(token || "")
+    .toLowerCase()
+    .replace(/^[.,!?;:'"()［\]{}]+|[.,!?;:'"()［\]{}]+$/g, "");
+}
+
+function compareDictationAnswer(correctText, userText, language) {
+  const correctTokens = tokenizeDictationText(correctText, language);
+  const userTokens = tokenizeDictationText(userText, language);
+  const maxLength = Math.max(correctTokens.length, userTokens.length);
+  const results = [];
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const correct = correctTokens[index] || "";
+    const actual = userTokens[index] || "";
+
+    if (correct && actual && normalizeDictationToken(correct) === normalizeDictationToken(actual)) {
+      results.push({ type: "match", correct, actual });
+    } else if (correct && !actual) {
+      results.push({ type: "missing", correct, actual: "" });
+    } else if (!correct && actual) {
+      results.push({ type: "extra", correct: "", actual });
+    } else {
+      results.push({ type: "different", correct, actual });
+    }
+  }
+
+  return results;
+}
+
+function dictationRatingToSrsOutcome(rating) {
+  const map = {
+    great: "easy",
+    ok: "normal",
+    hard: "hard",
+    failed: "forgot"
+  };
+  return map[rating] || "normal";
+}
+
+function dictationRatingLabel(rating) {
+  const labels = {
+    great: "よくできた",
+    ok: "だいたいできた",
+    hard: "難しかった",
+    failed: "できなかった"
+  };
+  return labels[rating] || rating;
+}
+
+async function updateSrsAfterPractice(itemId, outcome) {
+  try {
+    return await srsRepository.updateSrsAfterReview(itemId, outcome);
+  } catch (error) {
+    if (!String(error.message || "").includes("SRSデータが見つかりません")) {
+      throw error;
+    }
+
+    await createInitialSrsData(itemId);
+    return srsRepository.updateSrsAfterReview(itemId, outcome);
+  }
+}
+
+function createDictationSession(context = "standalone") {
+  return {
+    context,
+    queue: dictationTargets(),
+    index: 0,
+    revealed: false,
+    evaluated: false,
+    completedCount: 0,
+    difficultItems: [],
+    inputText: "",
+    error: "",
+    complete: false
+  };
+}
+
+function currentDictationEntry() {
+  if (!state.dictationSession) {
+    return null;
+  }
+
+  return state.dictationSession.queue[state.dictationSession.index] || null;
+}
+
+function renderDictationDiff(diff) {
+  if (!diff.length) {
+    return "<p class=\"muted\">比較する語がありません。</p>";
+  }
+
+  return `
+    <div class="dictation-diff">
+      ${diff
+        .map((part) => {
+          const label = part.type === "match" ? "一致" : part.type === "missing" ? "抜け" : part.type === "extra" ? "余分" : "違い";
+          const text =
+            part.type === "different"
+              ? `${part.actual || "未入力"} → ${part.correct || "なし"}`
+              : part.actual || part.correct;
+          return `<span class="dictation-token dictation-token--${part.type}" title="${escapeHtml(label)}">${escapeHtml(text)}</span>`;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDictationPractice(root = elements.dictationPractice, options = {}) {
+  if (!root) {
+    return;
+  }
+
+  const context = options.context || "standalone";
+  if (!state.dictationSession || state.dictationSession.context !== context || options.reset) {
+    state.dictationSession = createDictationSession(context);
+  }
+
+  const session = state.dictationSession;
+
+  if (!session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <p>ディクテーション対象の文章がありません。</p>
+        <p class="muted">sentenceまたはlisteningタイプで、contentまたはexampleが入ったLearningItemを登録してください。</p>
+        <button type="button" class="soft-button dictation-reload">再読み込み</button>
+      </div>
+    `;
+    attachDictationEvents(root);
+    return;
+  }
+
+  if (session.complete || session.index >= session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <h3>ディクテーション完了</h3>
+        <p>今回解いた問題数: ${escapeHtml(String(session.completedCount))}</p>
+        ${
+          session.difficultItems.length
+            ? `<h4>難しかった項目</h4><ul class="mistake-list">${session.difficultItems
+                .map((item) => `<li>${escapeHtml(item.title || "")}（${escapeHtml(learningItemTypeLabel(item.type))}）</li>`)
+                .join("")}</ul>`
+            : "<p>難しい項目はありませんでした。</p>"
+        }
+        <button type="button" class="soft-button dictation-restart">もう一度練習</button>
+      </div>
+    `;
+    attachDictationEvents(root);
+    return;
+  }
+
+  const item = currentDictationEntry();
+  const answer = dictationAnswerText(item);
+  const diff = session.revealed ? compareDictationAnswer(answer, session.inputText, item.language) : [];
+  const rateOptions = [
+    ["0.75", "0.75倍"],
+    ["1", "1.0倍"],
+    ["1.25", "1.25倍"]
+  ];
+
+  root.innerHTML = `
+    <div class="dictation-practice">
+      <div class="review-toolbar">
+        <div class="review-stat">
+          <span>今日のディクテーション対象</span>
+          <strong>${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+        <div class="review-stat">
+          <span>現在の問題</span>
+          <strong>${escapeHtml(String(session.index + 1))} / ${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+      </div>
+      ${session.error ? `<p class="auth-message auth-message--error">${escapeHtml(session.error)}</p>` : ""}
+      <section class="section-card">
+        <p class="eyebrow">${escapeHtml(learningItemTypeLabel(item.type))} / ${escapeHtml(languageLabel(item.language))}</p>
+        <h3>${escapeHtml(item.title || "ディクテーション問題")}</h3>
+        <p class="muted">音声を聞いて、聞き取った文章を入力してください。</p>
+        <div class="field-row">
+          <label>
+            速度
+            <select class="dictation-rate">
+              ${rateOptions.map(([value, label]) => `<option value="${value}" ${value === "1" ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+          </label>
+          <div class="dictation-audio-actions">
+            <button type="button" class="soft-button dictation-play">音声再生</button>
+          </div>
+        </div>
+      </section>
+      <label>
+        聞き取った文章
+        <textarea class="dictation-input" rows="5" placeholder="ここに聞き取った文章を入力">${escapeHtml(session.inputText)}</textarea>
+      </label>
+      <div class="mini-actions">
+        <button type="button" class="soft-button dictation-reveal" ${session.revealed ? "disabled" : ""}>答えを見る</button>
+        <button type="button" class="soft-button dictation-next" ${session.evaluated ? "" : "disabled"}>次へ</button>
+        <button type="button" class="soft-button dictation-end">終了</button>
+      </div>
+      ${
+        session.revealed
+          ? `
+            <section class="answer-panel">
+              <h4>ユーザー入力</h4>
+              <p>${escapeHtml(session.inputText || "未入力")}</p>
+              <h4>正解文</h4>
+              <p>${escapeHtml(answer)}</p>
+              <h4>差分</h4>
+              ${renderDictationDiff(diff)}
+              <div class="mini-actions dictation-rating-actions">
+                <button type="button" class="review-rating-button dictation-rate-button" data-rating="great" ${session.evaluated ? "disabled" : ""}>よくできた</button>
+                <button type="button" class="review-rating-button dictation-rate-button" data-rating="ok" ${session.evaluated ? "disabled" : ""}>だいたいできた</button>
+                <button type="button" class="review-rating-button soft-button dictation-rate-button" data-rating="hard" ${session.evaluated ? "disabled" : ""}>難しかった</button>
+                <button type="button" class="review-rating-button soft-button dictation-rate-button" data-rating="failed" ${session.evaluated ? "disabled" : ""}>できなかった</button>
+              </div>
+            </section>
+          `
+          : ""
+      }
+    </div>
+  `;
+
+  attachDictationEvents(root);
+}
+
+function attachDictationEvents(root) {
+  root.querySelector(".dictation-reload")?.addEventListener("click", async () => {
+    await loadLearningItems();
+    renderDictationPractice(root, { context: state.dictationSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".dictation-restart")?.addEventListener("click", () => {
+    renderDictationPractice(root, { context: state.dictationSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".dictation-input")?.addEventListener("input", (event) => {
+    if (state.dictationSession) {
+      state.dictationSession.inputText = event.target.value;
+    }
+  });
+
+  root.querySelector(".dictation-play")?.addEventListener("click", () => {
+    const item = currentDictationEntry();
+    if (!item) {
+      return;
+    }
+    const rate = Number(root.querySelector(".dictation-rate")?.value || 1);
+    const answer = dictationAnswerText(item);
+    setTtsText(answer, item.language);
+    speakText(answer, { language: languageToSpeechLang(item.language), rate });
+  });
+
+  root.querySelector(".dictation-reveal")?.addEventListener("click", () => {
+    if (!state.dictationSession) {
+      return;
+    }
+    const input = root.querySelector(".dictation-input")?.value || "";
+    state.dictationSession.inputText = input;
+    state.dictationSession.revealed = true;
+    state.dictationSession.error = "";
+    renderDictationPractice(root, { context: state.dictationSession.context });
+    setStatus("正解を表示しました。自己評価を選んでください。");
+  });
+
+  root.querySelectorAll(".dictation-rate-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await submitDictationRating(button.dataset.rating, root);
+    });
+  });
+
+  root.querySelector(".dictation-next")?.addEventListener("click", () => {
+    if (!state.dictationSession) {
+      return;
+    }
+    state.dictationSession.index += 1;
+    state.dictationSession.revealed = false;
+    state.dictationSession.evaluated = false;
+    state.dictationSession.inputText = "";
+    state.dictationSession.error = "";
+    renderDictationPractice(root, { context: state.dictationSession.context });
+  });
+
+  root.querySelector(".dictation-end")?.addEventListener("click", () => {
+    if (!state.dictationSession) {
+      return;
+    }
+    state.dictationSession.complete = true;
+    renderDictationPractice(root, { context: state.dictationSession.context });
+  });
+}
+
+async function submitDictationRating(rating, root) {
+  const session = state.dictationSession;
+  const item = currentDictationEntry();
+
+  if (!session || !item || !session.revealed) {
+    setStatus("先に答えを表示してください。");
+    return;
+  }
+
+  await withBusy(async () => {
+    const outcome = dictationRatingToSrsOutcome(rating);
+    await updateSrsAfterPractice(item.id, outcome);
+    session.evaluated = true;
+    session.completedCount += 1;
+
+    if (session.context === "course" && state.courseRun) {
+      state.courseRun.dictationCount += 1;
+      state.courseRun.reviewedItemIds = uniqueValues([...state.courseRun.reviewedItemIds, item.id]);
+      if (outcome === "hard" || outcome === "forgot") {
+        state.courseRun.mistakeItemIds = uniqueValues([...state.courseRun.mistakeItemIds, item.id]);
+      }
+    }
+
+    if (outcome === "hard" || outcome === "forgot") {
+      session.difficultItems.push(item);
+    }
+
+    session.error = "";
+    renderDictationPractice(root, { context: session.context });
+    setStatus(`ディクテーション結果を保存しました: ${dictationRatingLabel(rating)}`);
+  }, "ディクテーション結果を保存しています...");
+
+  if (state.dictationSession && !state.dictationSession.evaluated) {
+    state.dictationSession.error = "SRS更新に失敗しました。ネットワークまたは保存先を確認してください。";
+    renderDictationPractice(root, { context: state.dictationSession.context });
+  }
+}
+
 function pauseSpeech() {
   if (supportsSpeechSynthesis() && window.speechSynthesis.speaking) {
     window.speechSynthesis.pause();
@@ -675,6 +1025,10 @@ function switchPage(pageId) {
 
   if (pageId === "audio") {
     loadTtsVoices();
+  }
+
+  if (pageId === "dictation") {
+    loadDictationPractice();
   }
 }
 
@@ -1163,6 +1517,20 @@ async function loadLearningItems() {
   }
 }
 
+async function loadDictationPractice() {
+  try {
+    const data = await learningItemsRepository.getLearningItems();
+    state.learningItems = data.items || [];
+    renderDictationPractice(elements.dictationPractice, { context: "standalone", reset: true });
+    setStatus("ディクテーション対象を読み込みました。");
+  } catch (error) {
+    if (elements.dictationPractice) {
+      elements.dictationPractice.innerHTML = `<p class="auth-message auth-message--error">${escapeHtml(error.message || "ディクテーション対象の読み込みに失敗しました。")}</p>`;
+    }
+    setStatus(error.message || "ディクテーション対象の読み込みに失敗しました。");
+  }
+}
+
 function renderLearningItemTable() {
   if (state.learningItems.length === 0) {
     elements.learningItemTableBody.innerHTML = `
@@ -1422,9 +1790,6 @@ function markCourseStepDone(collectionName) {
 function completeCurrentCourseStep() {
   markCourseStepDone("completedSteps");
   const step = currentCourseStep();
-  if (step?.type === "dictation") {
-    state.courseRun.dictationCount += 1;
-  }
   if (step?.type === "recording") {
     state.courseRun.recordingCount += 1;
   }
@@ -1563,25 +1928,8 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "dictation") {
-    elements.courseStepUi.innerHTML = `
-      <div class="course-step-ui-grid">
-        <p>読み上げ音声を聞き取り、内容を書き取ります。</p>
-        <label>
-          読み上げる文章
-          <textarea id="course-dictation-tts-text" rows="4" placeholder="読み上げたい文章を入力"></textarea>
-        </label>
-        <div class="mini-actions">
-          <button type="button" id="course-dictation-tts-play" class="soft-button">読み上げ</button>
-        </div>
-        <textarea rows="5" placeholder="聞き取った内容を入力"></textarea>
-      </div>
-    `;
     run.renderedStepIndex = run.currentStepIndex;
-    document.querySelector("#course-dictation-tts-play").addEventListener("click", () => {
-      const text = document.querySelector("#course-dictation-tts-text").value;
-      setTtsText(text, elements.ttsLanguage.value);
-      speakText(text);
-    });
+    renderDictationPractice(elements.courseStepUi, { context: "course", reset: true });
     return;
   }
 
@@ -1728,6 +2076,7 @@ function renderCourseSummary() {
       <div class="course-summary-item"><span>完了ステップ</span><strong>${escapeHtml(String(payload.completedSteps.length))}</strong></div>
       <div class="course-summary-item"><span>復習項目</span><strong>${escapeHtml(String(payload.reviewedItemIds.length))}</strong></div>
       <div class="course-summary-item"><span>難しい/忘れた</span><strong>${escapeHtml(String(payload.mistakeItemIds.length))}</strong></div>
+      <div class="course-summary-item"><span>ディクテーション</span><strong>${escapeHtml(String(payload.dictationCount))}</strong></div>
     </div>
     <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
     <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>

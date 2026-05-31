@@ -20,6 +20,7 @@
           <button class="nav-button" data-page="learning-items" type="button">学習アイテム登録</button>
           <button class="nav-button" data-page="course" type="button">学習タイマー</button>
           <button class="nav-button" data-page="audio" type="button">音声練習</button>
+          <button class="nav-button" data-page="dictation" type="button">ディクテーション</button>
           <button class="nav-button" data-page="notebook" type="button">単語帳</button>
           <button class="nav-button" data-page="review" type="button">復習モード</button>
           <button class="nav-button" data-page="history" type="button">学習履歴</button>
@@ -77,6 +78,10 @@
             <button class="home-card" data-go="audio" type="button">
               <strong>音声練習</strong>
               <span>文章を読み上げてリスニング・シャドーイングの土台にする</span>
+            </button>
+            <button class="home-card" data-go="dictation" type="button">
+              <strong>ディクテーション</strong>
+              <span>音声を聞いて入力し、正解文との差分を確認</span>
             </button>
             <button class="home-card" data-go="notebook" type="button">
               <strong>単語帳</strong>
@@ -429,6 +434,18 @@
               <button type="button" id="tts-pause" class="soft-button">一時停止</button>
               <button type="button" id="tts-resume" class="soft-button">再開</button>
             </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-dictation">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Dictation</p>
+              <h2>ディクテーション練習</h2>
+            </div>
+          </div>
+          <section class="card stack">
+            <div id="dictation-practice"></div>
           </section>
         </section>
 
