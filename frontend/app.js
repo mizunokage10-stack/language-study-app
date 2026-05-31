@@ -1979,7 +1979,7 @@ function getLearningItemFilters() {
   return new URLSearchParams(query ? query.slice(1) : "");
 }
 
-const { learningItemsRepository, srsRepository, learningSessionsRepository, studyLogsRepository } = createRepositories({
+const { materialsRepository, learningItemsRepository, srsRepository, learningSessionsRepository, studyLogsRepository } = createRepositories({
   supabase,
   fetchJson,
   getCurrentUser: () => state.currentUser,
@@ -2157,32 +2157,21 @@ function setCoursesMaterialsMessage(message, isError = false) {
   elements.courseMaterialsMessage.classList.toggle("auth-message--error", isError);
 }
 
-async function fetchVocabulary(language, cefrLevel, domain, limit = 20) {
-  const params = new URLSearchParams({ language, cefr_level: cefrLevel });
-  if (domain) params.set("domain", domain);
-  params.set("limit", String(limit));
-  const response = await fetch(`/api/materials/vocabulary?${params}`);
-  if (!response.ok) throw new Error(`語彙取得エラー: ${response.status}`);
-  const data = await response.json();
+async function fetchVocabulary(language, cefrLevel, domain, limit = 30) {
+  const data = await materialsRepository.getVocabulary({ language, cefrLevel, domain, limit });
   return data.items || [];
 }
 
-async function fetchReadingMaterials(language, cefrLevel, domain) {
-  const params = new URLSearchParams({ language, cefr_level: cefrLevel });
-  if (domain) params.set("domain", domain);
-  const response = await fetch(`/api/materials/reading?${params}`);
-  if (!response.ok) throw new Error(`文章教材取得エラー: ${response.status}`);
-  const data = await response.json();
+async function fetchReadingMaterials(language, cefrLevel, domain, limit = 5) {
+  const data = await materialsRepository.getReadingMaterials({ language, cefrLevel, domain, limit });
   return data.items || [];
 }
 
 async function loadCourseDomains() {
   try {
-    const response = await fetch("/api/materials/domains");
-    if (!response.ok) return;
-    const data = await response.json();
+    const data = await materialsRepository.getDomains();
     const domains = data.domains || [];
-    if (!elements.courseFilterDomain) return;
+    if (!elements.courseFilterDomain || !domains.length) return;
     const current = elements.courseFilterDomain.value;
     elements.courseFilterDomain.innerHTML =
       `<option value="">すべて</option>` +
@@ -2193,7 +2182,7 @@ async function loadCourseDomains() {
       elements.courseFilterDomain.value = current;
     }
   } catch {
-    // domains fetch failed - default options remain
+    // 取得失敗時はデフォルトの「すべて」のみ表示のまま継続
   }
 }
 

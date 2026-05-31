@@ -705,7 +705,69 @@ export function createRepositories({
     }
   };
 
+  // ---- 教材リポジトリ（RLS読み取り専用 / anon key で OK / ユーザー認証不要） --------
+
+  const materialsRepository = {
+    async getVocabulary({ language, cefrLevel, domain, limit = 30 }) {
+      if (supabase) {
+        let query = supabase
+          .from("vocabulary_items")
+          .select("*")
+          .eq("language", language)
+          .eq("cefr_level", cefrLevel)
+          .order("id", { ascending: true })
+          .limit(limit);
+        if (domain) query = query.eq("domain", domain);
+        const { data, error } = await query;
+        if (error) throw new Error(formatSupabaseError("語彙取得", error));
+        return { items: data || [] };
+      }
+      // ローカルバックエンドへフォールバック
+      const params = new URLSearchParams({ language, cefr_level: cefrLevel, limit: String(limit) });
+      if (domain) params.set("domain", domain);
+      const res = await fetch(`/api/materials/vocabulary?${params}`);
+      if (!res.ok) throw new Error(`語彙取得エラー: ${res.status}`);
+      return res.json();
+    },
+
+    async getReadingMaterials({ language, cefrLevel, domain, limit = 5 }) {
+      if (supabase) {
+        let query = supabase
+          .from("reading_materials")
+          .select("*")
+          .eq("language", language)
+          .eq("cefr_level", cefrLevel)
+          .order("id", { ascending: true })
+          .limit(limit);
+        if (domain) query = query.eq("domain", domain);
+        const { data, error } = await query;
+        if (error) throw new Error(formatSupabaseError("文章教材取得", error));
+        return { items: data || [] };
+      }
+      const params = new URLSearchParams({ language, cefr_level: cefrLevel, limit: String(limit) });
+      if (domain) params.set("domain", domain);
+      const res = await fetch(`/api/materials/reading?${params}`);
+      if (!res.ok) throw new Error(`文章教材取得エラー: ${res.status}`);
+      return res.json();
+    },
+
+    async getDomains() {
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("domains")
+          .select("id, name_ja, sort_order")
+          .order("sort_order", { ascending: true });
+        if (error) throw new Error(formatSupabaseError("領域取得", error));
+        return { domains: data || [] };
+      }
+      const res = await fetch("/api/materials/domains");
+      if (!res.ok) throw new Error(`領域取得エラー: ${res.status}`);
+      return res.json();
+    }
+  };
+
   return {
+    materialsRepository,
     learningItemsRepository: {
       getLearningItems: (...args) =>
         shouldUseSupabase()
