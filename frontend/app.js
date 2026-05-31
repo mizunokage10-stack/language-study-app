@@ -8,9 +8,13 @@ const state = {
   isBusy: false,
   learningItems: [],
   historyItems: [],
+  learningSessions: [],
+  studyLogs: [],
   notebookItems: [],
   selectedLearningItemId: "",
   selectedHistoryId: "",
+  selectedSessionId: "",
+  selectedStudyLogId: "",
   selectedNotebookId: "",
   reviewQueue: [],
   reviewIndex: 0,
@@ -26,6 +30,7 @@ const localStoreKeys = {
   learningItems: "language-study.learningItems",
   srsData: "language-study.srsData",
   learningSessions: "language-study.learningSessions",
+  studyLogs: "language-study.studyLogs",
   notebookItems: "language-study.notebookItems",
   historyItems: "language-study.historyItems"
 };
@@ -82,7 +87,13 @@ const elements = {
   courseSaveMessage: document.querySelector("#course-save-message"),
   courseSave: document.querySelector("#course-save"),
   courseHome: document.querySelector("#course-home"),
-  historyTableBody: document.querySelector("#history-table-body"),
+  historyTodayMinutes: document.querySelector("#history-today-minutes"),
+  historyWeekMinutes: document.querySelector("#history-week-minutes"),
+  historyStreakDays: document.querySelector("#history-streak-days"),
+  historyLatestSession: document.querySelector("#history-latest-session"),
+  historyLatestLog: document.querySelector("#history-latest-log"),
+  sessionHistoryTableBody: document.querySelector("#session-history-table-body"),
+  studyLogTableBody: document.querySelector("#study-log-table-body"),
   historyDetail: document.querySelector("#history-detail"),
   refreshHistory: document.querySelector("#refresh-history"),
   notebookTableBody: document.querySelector("#notebook-table-body"),
@@ -285,6 +296,9 @@ function initAuth() {
     }
     if (state.currentPage === "review") {
       loadReviewItems();
+    }
+    if (state.currentPage === "history") {
+      loadHistory();
     }
   });
 
@@ -739,6 +753,45 @@ async function handleLocalJson(url, options = {}) {
     }
   }
 
+  if (path === "/api/study-logs" && method === "GET") {
+    return localJsonResponse({ items: sortByCreatedAtDesc(readLocalCollection(localStoreKeys.studyLogs)) });
+  }
+
+  if (path === "/api/study-logs" && method === "POST") {
+    const items = readLocalCollection(localStoreKeys.studyLogs);
+    const timestamp = new Date().toISOString();
+    const item = {
+      id: body.id || createLocalId(),
+      date: body.date || timestamp.slice(0, 10),
+      learnedItems: Array.isArray(body.learnedItems) ? body.learnedItems : [],
+      mistakes: Array.isArray(body.mistakes) ? body.mistakes : [],
+      feedback: body.feedback || "",
+      tomorrowReviewItems: Array.isArray(body.tomorrowReviewItems) ? body.tomorrowReviewItems : [],
+      freeNote: body.freeNote || "",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    items.unshift(item);
+    writeLocalCollection(localStoreKeys.studyLogs, items);
+    return localJsonResponse({ item });
+  }
+
+  if (path.startsWith("/api/study-logs/")) {
+    const id = decodeURIComponent(path.split("/").pop());
+    const items = readLocalCollection(localStoreKeys.studyLogs);
+    const index = items.findIndex((item) => item.id === id);
+
+    if (method === "GET") {
+      return localJsonResponse({ item: index === -1 ? null : items[index] });
+    }
+
+    if (method === "DELETE" && index !== -1) {
+      items.splice(index, 1);
+      writeLocalCollection(localStoreKeys.studyLogs, items);
+      return localJsonResponse({ ok: true });
+    }
+  }
+
   if (path === "/api/vocabulary" && method === "GET") {
     const items = readLocalCollection(localStoreKeys.notebookItems);
     return localJsonResponse({ items: filterVocabularyItems(items, parsedUrl.searchParams) });
@@ -859,7 +912,7 @@ function getLearningItemFilters() {
   return new URLSearchParams(query ? query.slice(1) : "");
 }
 
-const { learningItemsRepository, srsRepository, learningSessionsRepository } = createRepositories({
+const { learningItemsRepository, srsRepository, learningSessionsRepository, studyLogsRepository } = createRepositories({
   supabase,
   fetchJson,
   getCurrentUser: () => state.currentUser,
@@ -1539,37 +1592,105 @@ async function deleteNotebookItem(id) {
 
 async function loadHistory() {
   try {
-    const data = await fetchJson("/api/history");
-    state.historyItems = data.items || [];
-    renderHistoryTable();
+    const [sessionsData, logsData] = await Promise.all([
+      learningSessionsRepository.getLearningSessions(),
+      studyLogsRepository.getStudyLogs()
+    ]);
+    state.learningSessions = sortHistoryByDate(sessionsData.items || []);
+    state.studyLogs = sortHistoryByDate(logsData.items || []);
+    renderHistorySummary();
+    renderSessionHistoryTable();
+    renderStudyLogTable();
     setStatus("学習履歴を読み込みました。");
   } catch (error) {
     setStatus(error.message || "履歴の読み込みに失敗しました。");
   }
 }
 
-function renderHistoryTable() {
-  if (state.historyItems.length === 0) {
-    elements.historyTableBody.innerHTML = `
+function sortHistoryByDate(items) {
+  return [...items].sort((a, b) => {
+    const dateA = new Date(a.date || a.createdAt || 0);
+    const dateB = new Date(b.date || b.createdAt || 0);
+    return dateB - dateA;
+  });
+}
+
+function historyDateLabel(value) {
+  return value || "";
+}
+
+function sessionDateSet() {
+  return new Set(
+    state.learningSessions
+      .filter((session) => Number(session.actualMinutes || 0) > 0)
+      .map((session) => session.date)
+      .filter(Boolean)
+  );
+}
+
+function calculateStudyStreak() {
+  const dates = sessionDateSet();
+  let streak = 0;
+  const cursor = new Date(todayDateString());
+
+  while (dates.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
+function renderHistorySummary() {
+  const today = todayDateString();
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const sevenDaysAgoIso = sevenDaysAgo.toISOString().slice(0, 10);
+
+  const todayMinutes = state.learningSessions
+    .filter((session) => session.date === today)
+    .reduce((sum, session) => sum + Number(session.actualMinutes || 0), 0);
+  const weekMinutes = state.learningSessions
+    .filter((session) => session.date >= sevenDaysAgoIso && session.date <= today)
+    .reduce((sum, session) => sum + Number(session.actualMinutes || 0), 0);
+  const latestSession = state.learningSessions[0];
+  const latestLog = state.studyLogs[0];
+
+  elements.historyTodayMinutes.textContent = `${todayMinutes}分`;
+  elements.historyWeekMinutes.textContent = `${weekMinutes}分`;
+  elements.historyStreakDays.textContent = `${calculateStudyStreak()}日`;
+  elements.historyLatestSession.textContent = latestSession ? `${latestSession.courseName || "セッション"} / ${latestSession.actualMinutes || 0}分` : "なし";
+  elements.historyLatestLog.textContent = latestLog ? historyDateLabel(latestLog.date) : "なし";
+}
+
+function renderSessionHistoryTable() {
+  if (state.learningSessions.length === 0) {
+    elements.sessionHistoryTableBody.innerHTML = `
       <tr>
-        <td colspan="5">まだ保存された履歴はありません。</td>
+        <td colspan="11">まだ学習履歴がありません。</td>
       </tr>
     `;
     return;
   }
 
-  elements.historyTableBody.innerHTML = state.historyItems
+  elements.sessionHistoryTableBody.innerHTML = state.learningSessions
     .map(
-      (item) => `
+      (session) => `
         <tr>
-          <td>${escapeHtml(formatDate(item.createdAt))}</td>
-          <td>${escapeHtml(languageLabel(item.language))}</td>
-          <td>${escapeHtml(modeLabel(item.mode))}</td>
-          <td>${escapeHtml(item.title || "")}</td>
+          <td>${escapeHtml(historyDateLabel(session.date))}</td>
+          <td>${escapeHtml(session.courseName || "")}</td>
+          <td>${escapeHtml(String(session.plannedMinutes || 0))}分</td>
+          <td>${escapeHtml(String(session.actualMinutes || 0))}分</td>
+          <td>${escapeHtml(String(session.completedSteps?.length || 0))}</td>
+          <td>${escapeHtml(String(session.skippedSteps?.length || 0))}</td>
+          <td>${escapeHtml(String(session.reviewedItemIds?.length || 0))}</td>
+          <td>${escapeHtml(String(session.mistakeItemIds?.length || 0))}</td>
+          <td>${session.writingText ? "あり" : "なし"}</td>
+          <td>${session.note ? "あり" : "なし"}</td>
           <td>
             <div class="table-actions">
-              <button type="button" class="soft-button history-view" data-id="${item.id}">詳細表示</button>
-              <button type="button" class="soft-button history-delete" data-id="${item.id}">削除</button>
+              <button type="button" class="soft-button session-view" data-id="${session.id}">詳細</button>
+              <button type="button" class="soft-button session-delete" data-id="${session.id}">削除</button>
             </div>
           </td>
         </tr>
@@ -1578,19 +1699,147 @@ function renderHistoryTable() {
     .join("");
 }
 
-function renderHistoryDetail(item) {
+function renderStudyLogTable() {
+  if (state.studyLogs.length === 0) {
+    elements.studyLogTableBody.innerHTML = `
+      <tr>
+        <td colspan="6">まだ学習ログがありません。</td>
+      </tr>
+    `;
+    return;
+  }
+
+  elements.studyLogTableBody.innerHTML = state.studyLogs
+    .map(
+      (log) => `
+        <tr>
+          <td>${escapeHtml(historyDateLabel(log.date))}</td>
+          <td>${escapeHtml(String(log.learnedItems?.length || 0))}</td>
+          <td>${escapeHtml(String(log.mistakes?.length || 0))}</td>
+          <td>${log.feedback ? "あり" : "なし"}</td>
+          <td>${log.freeNote ? "あり" : "なし"}</td>
+          <td>
+            <div class="table-actions">
+              <button type="button" class="soft-button study-log-view" data-id="${log.id}">詳細</button>
+              <button type="button" class="soft-button study-log-delete" data-id="${log.id}">削除</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderItemList(items, fallbackIds = []) {
+  if (items.length === 0 && fallbackIds.length === 0) {
+    return "<p>なし</p>";
+  }
+
+  if (items.length === 0) {
+    return `<ul class="detail-list">${fallbackIds.map((id) => `<li>${escapeHtml(id)}</li>`).join("")}</ul>`;
+  }
+
+  return `
+    <div class="item-chip-list">
+      ${items
+        .map(
+          (item) => `
+            <div class="item-chip">
+              <strong>${escapeHtml(item.title || item.id)}</strong>
+              <span>${escapeHtml(learningItemTypeLabel(item.type))} / ${escapeHtml(languageLabel(item.language))}</span>
+              ${item.meaning ? `<p>${escapeHtml(item.meaning)}</p>` : ""}
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function loadLearningItemsByIds(ids) {
+  const uniqueIds = uniqueValues(ids);
+  if (!uniqueIds.length) {
+    return [];
+  }
+
+  try {
+    const data = await learningItemsRepository.getLearningItemsByIds(uniqueIds);
+    return data.items || [];
+  } catch (error) {
+    setStatus(error.message || "学習アイテムの取得に失敗しました。");
+    return [];
+  }
+}
+
+async function renderSessionDetail(session) {
+  const reviewedItems = await loadLearningItemsByIds(session.reviewedItemIds || []);
+  const mistakeItems = await loadLearningItemsByIds(session.mistakeItemIds || []);
+
   elements.historyDetail.className = "result-area";
   elements.historyDetail.innerHTML = `
     <div class="rendered-result">
-      <h3>${escapeHtml(item.title || "学習履歴")}</h3>
-      <div class="summary-box">${escapeHtml(languageLabel(item.language))} / ${escapeHtml(modeLabel(item.mode))} / ${escapeHtml(formatDate(item.createdAt))}</div>
+      <h3>${escapeHtml(session.courseName || "LearningSession")}</h3>
+      <div class="summary-box">${escapeHtml(historyDateLabel(session.date))} / 予定 ${escapeHtml(String(session.plannedMinutes || 0))}分 / 実績 ${escapeHtml(String(session.actualMinutes || 0))}分</div>
       <article class="section-card">
-        <h4>入力文</h4>
-        <p>${escapeHtml(item.inputText || "")}</p>
+        <h4>完了したステップ</h4>
+        <p>${escapeHtml((session.completedSteps || []).join(", ") || "なし")}</p>
       </article>
       <article class="section-card">
-        <h4>保存メモ</h4>
-        <p>${escapeHtml(item.memo || "メモなし")}</p>
+        <h4>スキップしたステップ</h4>
+        <p>${escapeHtml((session.skippedSteps || []).join(", ") || "なし")}</p>
+      </article>
+      <article class="section-card">
+        <h4>復習した項目</h4>
+        ${renderItemList(reviewedItems, session.reviewedItemIds || [])}
+      </article>
+      <article class="section-card">
+        <h4>難しい / 忘れた項目</h4>
+        ${renderItemList(mistakeItems, session.mistakeItemIds || [])}
+      </article>
+      <article class="section-card">
+        <h4>カウント</h4>
+        <p>dictationCount: ${escapeHtml(String(session.dictationCount || 0))} / recordingCount: ${escapeHtml(String(session.recordingCount || 0))}</p>
+      </article>
+      <article class="section-card">
+        <h4>作文</h4>
+        <p>${escapeHtml(session.writingText || "未入力")}</p>
+      </article>
+      <article class="section-card">
+        <h4>フィードバック</h4>
+        <p>${escapeHtml(session.feedbackText || "なし")}</p>
+      </article>
+      <article class="section-card">
+        <h4>メモ</h4>
+        <p>${escapeHtml(session.note || "未入力")}</p>
+      </article>
+    </div>
+  `;
+}
+
+function renderStudyLogDetail(log) {
+  elements.historyDetail.className = "result-area";
+  elements.historyDetail.innerHTML = `
+    <div class="rendered-result">
+      <h3>StudyLog ${escapeHtml(historyDateLabel(log.date))}</h3>
+      <article class="section-card">
+        <h4>learnedItems</h4>
+        <p>${escapeHtml(JSON.stringify(log.learnedItems || [], null, 2))}</p>
+      </article>
+      <article class="section-card">
+        <h4>mistakes</h4>
+        <p>${escapeHtml(JSON.stringify(log.mistakes || [], null, 2))}</p>
+      </article>
+      <article class="section-card">
+        <h4>feedback</h4>
+        <p>${escapeHtml(log.feedback || "なし")}</p>
+      </article>
+      <article class="section-card">
+        <h4>tomorrowReviewItems</h4>
+        <p>${escapeHtml(JSON.stringify(log.tomorrowReviewItems || [], null, 2))}</p>
+      </article>
+      <article class="section-card">
+        <h4>freeNote</h4>
+        <p>${escapeHtml(log.freeNote || "なし")}</p>
       </article>
     </div>
   `;
@@ -1601,28 +1850,56 @@ function clearHistoryDetail() {
   elements.historyDetail.innerHTML = "<p>履歴を選ぶと詳細が表示されます。</p>";
 }
 
-async function showHistoryDetail(id) {
+async function showSessionDetail(id) {
   try {
-    const data = await fetchJson(`/api/history/${id}`);
-    state.selectedHistoryId = id;
-    renderHistoryDetail(data.item);
+    const data = await learningSessionsRepository.getLearningSessionById(id);
+    state.selectedSessionId = id;
+    state.selectedStudyLogId = "";
+    if (!data.item) {
+      throw new Error("学習セッションが見つかりません。");
+    }
+    await renderSessionDetail(data.item);
   } catch (error) {
-    setStatus(error.message || "履歴詳細の読み込みに失敗しました。");
+    setStatus(error.message || "セッション詳細の読み込みに失敗しました。");
   }
 }
 
-async function deleteHistory(id) {
+async function showStudyLogDetail(id) {
+  try {
+    const data = await studyLogsRepository.getStudyLogById(id);
+    state.selectedStudyLogId = id;
+    state.selectedSessionId = "";
+    if (!data.item) {
+      throw new Error("学習ログが見つかりません。");
+    }
+    renderStudyLogDetail(data.item);
+  } catch (error) {
+    setStatus(error.message || "学習ログ詳細の読み込みに失敗しました。");
+  }
+}
+
+async function deleteSessionHistory(id) {
   await withBusy(async () => {
-    await fetchJson(`/api/history/${id}`, {
-      method: "DELETE"
-    });
-    if (state.selectedHistoryId === id) {
-      state.selectedHistoryId = "";
+    await learningSessionsRepository.deleteLearningSession(id);
+    if (state.selectedSessionId === id) {
+      state.selectedSessionId = "";
       clearHistoryDetail();
     }
     await loadHistory();
-    setStatus("履歴を削除しました。");
-  }, "履歴を削除しています...");
+    setStatus("学習セッションを削除しました。");
+  }, "学習セッションを削除しています...");
+}
+
+async function deleteStudyLogHistory(id) {
+  await withBusy(async () => {
+    await studyLogsRepository.deleteStudyLog(id);
+    if (state.selectedStudyLogId === id) {
+      state.selectedStudyLogId = "";
+      clearHistoryDetail();
+    }
+    await loadHistory();
+    setStatus("学習ログを削除しました。");
+  }, "学習ログを削除しています...");
 }
 
 function currentReviewEntry() {
@@ -1931,15 +2208,27 @@ elements.notebookTableBody.addEventListener("click", async (event) => {
 });
 
 elements.refreshHistory.addEventListener("click", loadHistory);
-elements.historyTableBody.addEventListener("click", async (event) => {
+elements.sessionHistoryTableBody.addEventListener("click", async (event) => {
   const target = event.target;
 
-  if (target.classList.contains("history-view")) {
-    await showHistoryDetail(target.dataset.id);
+  if (target.classList.contains("session-view")) {
+    await showSessionDetail(target.dataset.id);
   }
 
-  if (target.classList.contains("history-delete")) {
-    await deleteHistory(target.dataset.id);
+  if (target.classList.contains("session-delete")) {
+    await deleteSessionHistory(target.dataset.id);
+  }
+});
+
+elements.studyLogTableBody.addEventListener("click", async (event) => {
+  const target = event.target;
+
+  if (target.classList.contains("study-log-view")) {
+    await showStudyLogDetail(target.dataset.id);
+  }
+
+  if (target.classList.contains("study-log-delete")) {
+    await deleteStudyLogHistory(target.dataset.id);
   }
 });
 

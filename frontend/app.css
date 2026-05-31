@@ -390,6 +390,49 @@ button[type="submit"],
   gap: 12px;
 }
 
+.history-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.history-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.history-detail-card {
+  min-height: 360px;
+}
+
+.detail-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.item-chip-list {
+  display: grid;
+  gap: 10px;
+}
+
+.item-chip {
+  padding: 12px 14px;
+  border: 1px solid #dde6f0;
+  border-radius: 16px;
+  background: white;
+}
+
+.item-chip strong {
+  display: block;
+  color: #1e293b;
+}
+
+.item-chip span {
+  color: #526071;
+  font-size: 0.92rem;
+}
+
 .course-summary-item {
   padding: 12px 14px;
   border: 1px solid #dde6f0;

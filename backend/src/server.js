@@ -15,6 +15,7 @@ import {
   createSrsData,
   deleteLearningItem,
   deleteLearningSession,
+  deleteStudyLog,
   deleteSrsData,
   getLearningItem,
   getLearningSession,
@@ -243,6 +244,16 @@ app.get("/api/study-logs/:id", async (request, response) => {
   }
 
   return response.json({ item });
+});
+
+app.delete("/api/study-logs/:id", async (request, response) => {
+  const deleted = await deleteStudyLog(request.params.id);
+
+  if (!deleted) {
+    return response.status(404).json({ error: "学習ログが見つかりません。" });
+  }
+
+  return response.json({ ok: true });
 });
 
 app.get("/api/history", async (_request, response) => {

@@ -125,6 +125,32 @@ function toLearningSessionRow(session, userId) {
   };
 }
 
+function toStudyLog(row) {
+  return {
+    id: row.id,
+    date: row.date || "",
+    learnedItems: Array.isArray(row.learned_items) ? row.learned_items : [],
+    mistakes: Array.isArray(row.mistakes) ? row.mistakes : [],
+    feedback: row.feedback || "",
+    tomorrowReviewItems: Array.isArray(row.tomorrow_review_items) ? row.tomorrow_review_items : [],
+    freeNote: row.free_note || "",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
+function toStudyLogRow(log, userId) {
+  return {
+    user_id: userId,
+    date: log.date || todayIsoDate(),
+    learned_items: Array.isArray(log.learnedItems) ? log.learnedItems : [],
+    mistakes: Array.isArray(log.mistakes) ? log.mistakes : [],
+    feedback: log.feedback || "",
+    tomorrow_review_items: Array.isArray(log.tomorrowReviewItems) ? log.tomorrowReviewItems : [],
+    free_note: log.freeNote || ""
+  };
+}
+
 const srsReviewTypes = new Set(["vocabulary", "grammar", "sentence", "listening"]);
 
 function todayIsoDate() {
@@ -510,6 +536,10 @@ export function createRepositories({
       return fetchJson("/api/learning-sessions");
     },
 
+    async getLearningSessionById(id) {
+      return fetchJson(`/api/learning-sessions/${id}`);
+    },
+
     async createLearningSession(payload) {
       return fetchJson("/api/learning-sessions", {
         method: "POST",
@@ -541,6 +571,22 @@ export function createRepositories({
       return { items: (data || []).map(toLearningSession) };
     },
 
+    async getLearningSessionById(id) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("learning_sessions")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { item: data ? toLearningSession(data) : null };
+    },
+
     async createLearningSession(payload) {
       const user = getSupabaseUser();
       const { data, error } = await supabase
@@ -560,6 +606,93 @@ export function createRepositories({
       const user = getSupabaseUser();
       const { error } = await supabase
         .from("learning_sessions")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw new Error(formatSupabaseError("削除", error));
+      }
+
+      return { ok: true };
+    }
+  };
+
+  const localStudyLogsRepository = {
+    async getStudyLogs() {
+      return fetchJson("/api/study-logs");
+    },
+
+    async getStudyLogById(id) {
+      return fetchJson(`/api/study-logs/${id}`);
+    },
+
+    async createStudyLog(payload) {
+      return fetchJson("/api/study-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async deleteStudyLog(id) {
+      return fetchJson(`/api/study-logs/${id}`, {
+        method: "DELETE"
+      });
+    }
+  };
+
+  const supabaseStudyLogsRepository = {
+    async getStudyLogs() {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("study_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false });
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { items: (data || []).map(toStudyLog) };
+    },
+
+    async getStudyLogById(id) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("study_logs")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { item: data ? toStudyLog(data) : null };
+    },
+
+    async createStudyLog(payload) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("study_logs")
+        .insert(toStudyLogRow(payload, user.id))
+        .select("*")
+        .single();
+
+      if (error) {
+        throw new Error(formatSupabaseError("保存", error));
+      }
+
+      return { item: toStudyLog(data) };
+    },
+
+    async deleteStudyLog(id) {
+      const user = getSupabaseUser();
+      const { error } = await supabase
+        .from("study_logs")
         .delete()
         .eq("id", id)
         .eq("user_id", user.id);
@@ -626,6 +759,10 @@ export function createRepositories({
         shouldUseSupabase()
           ? supabaseLearningSessionsRepository.getLearningSessions(...args)
           : localLearningSessionsRepository.getLearningSessions(...args),
+      getLearningSessionById: (...args) =>
+        shouldUseSupabase()
+          ? supabaseLearningSessionsRepository.getLearningSessionById(...args)
+          : localLearningSessionsRepository.getLearningSessionById(...args),
       createLearningSession: (...args) =>
         shouldUseSupabase()
           ? supabaseLearningSessionsRepository.createLearningSession(...args)
@@ -634,6 +771,24 @@ export function createRepositories({
         shouldUseSupabase()
           ? supabaseLearningSessionsRepository.deleteLearningSession(...args)
           : localLearningSessionsRepository.deleteLearningSession(...args)
+    },
+    studyLogsRepository: {
+      getStudyLogs: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.getStudyLogs(...args)
+          : localStudyLogsRepository.getStudyLogs(...args),
+      getStudyLogById: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.getStudyLogById(...args)
+          : localStudyLogsRepository.getStudyLogById(...args),
+      createStudyLog: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.createStudyLog(...args)
+          : localStudyLogsRepository.createStudyLog(...args),
+      deleteStudyLog: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.deleteStudyLog(...args)
+          : localStudyLogsRepository.deleteStudyLog(...args)
     }
   };
 }
