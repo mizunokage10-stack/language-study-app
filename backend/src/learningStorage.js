@@ -350,3 +350,15 @@ export async function getStudyLog(id) {
   const logs = await readStudyLogs();
   return logs.find((log) => log.id === id) || null;
 }
+
+export async function deleteStudyLog(id) {
+  const logs = await readStudyLogs();
+  const nextLogs = logs.filter((log) => log.id !== id);
+
+  if (nextLogs.length === logs.length) {
+    return false;
+  }
+
+  await writeJsonFile(STUDY_LOGS_FILE, nextLogs);
+  return true;
+}

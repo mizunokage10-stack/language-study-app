@@ -125,6 +125,32 @@ function toLearningSessionRow(session, userId) {
   };
 }
 
+function toStudyLog(row) {
+  return {
+    id: row.id,
+    date: row.date || "",
+    learnedItems: Array.isArray(row.learned_items) ? row.learned_items : [],
+    mistakes: Array.isArray(row.mistakes) ? row.mistakes : [],
+    feedback: row.feedback || "",
+    tomorrowReviewItems: Array.isArray(row.tomorrow_review_items) ? row.tomorrow_review_items : [],
+    freeNote: row.free_note || "",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
+function toStudyLogRow(log, userId) {
+  return {
+    user_id: userId,
+    date: log.date || todayIsoDate(),
+    learned_items: Array.isArray(log.learnedItems) ? log.learnedItems : [],
+    mistakes: Array.isArray(log.mistakes) ? log.mistakes : [],
+    feedback: log.feedback || "",
+    tomorrow_review_items: Array.isArray(log.tomorrowReviewItems) ? log.tomorrowReviewItems : [],
+    free_note: log.freeNote || ""
+  };
+}
+
 const srsReviewTypes = new Set(["vocabulary", "grammar", "sentence", "listening"]);
 
 function todayIsoDate() {
@@ -510,6 +536,10 @@ export function createRepositories({
       return fetchJson("/api/learning-sessions");
     },
 
+    async getLearningSessionById(id) {
+      return fetchJson(`/api/learning-sessions/${id}`);
+    },
+
     async createLearningSession(payload) {
       return fetchJson("/api/learning-sessions", {
         method: "POST",
@@ -539,6 +569,22 @@ export function createRepositories({
       }
 
       return { items: (data || []).map(toLearningSession) };
+    },
+
+    async getLearningSessionById(id) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("learning_sessions")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { item: data ? toLearningSession(data) : null };
     },
 
     async createLearningSession(payload) {
@@ -572,7 +618,156 @@ export function createRepositories({
     }
   };
 
+  const localStudyLogsRepository = {
+    async getStudyLogs() {
+      return fetchJson("/api/study-logs");
+    },
+
+    async getStudyLogById(id) {
+      return fetchJson(`/api/study-logs/${id}`);
+    },
+
+    async createStudyLog(payload) {
+      return fetchJson("/api/study-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    },
+
+    async deleteStudyLog(id) {
+      return fetchJson(`/api/study-logs/${id}`, {
+        method: "DELETE"
+      });
+    }
+  };
+
+  const supabaseStudyLogsRepository = {
+    async getStudyLogs() {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("study_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false });
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { items: (data || []).map(toStudyLog) };
+    },
+
+    async getStudyLogById(id) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("study_logs")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { item: data ? toStudyLog(data) : null };
+    },
+
+    async createStudyLog(payload) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("study_logs")
+        .insert(toStudyLogRow(payload, user.id))
+        .select("*")
+        .single();
+
+      if (error) {
+        throw new Error(formatSupabaseError("保存", error));
+      }
+
+      return { item: toStudyLog(data) };
+    },
+
+    async deleteStudyLog(id) {
+      const user = getSupabaseUser();
+      const { error } = await supabase
+        .from("study_logs")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw new Error(formatSupabaseError("削除", error));
+      }
+
+      return { ok: true };
+    }
+  };
+
+  // ---- 教材リポジトリ（RLS読み取り専用 / anon key で OK / ユーザー認証不要） --------
+
+  const materialsRepository = {
+    async getVocabulary({ language, cefrLevel, domain, limit = 30 }) {
+      if (supabase) {
+        let query = supabase
+          .from("vocabulary_items")
+          .select("*")
+          .eq("language", language)
+          .eq("cefr_level", cefrLevel)
+          .order("id", { ascending: true })
+          .limit(limit);
+        if (domain) query = query.eq("domain", domain);
+        const { data, error } = await query;
+        if (error) throw new Error(formatSupabaseError("語彙取得", error));
+        return { items: data || [] };
+      }
+      // ローカルバックエンドへフォールバック
+      const params = new URLSearchParams({ language, cefr_level: cefrLevel, limit: String(limit) });
+      if (domain) params.set("domain", domain);
+      const res = await fetch(`/api/materials/vocabulary?${params}`);
+      if (!res.ok) throw new Error(`語彙取得エラー: ${res.status}`);
+      return res.json();
+    },
+
+    async getReadingMaterials({ language, cefrLevel, domain, limit = 5 }) {
+      if (supabase) {
+        let query = supabase
+          .from("reading_materials")
+          .select("*")
+          .eq("language", language)
+          .eq("cefr_level", cefrLevel)
+          .order("id", { ascending: true })
+          .limit(limit);
+        if (domain) query = query.eq("domain", domain);
+        const { data, error } = await query;
+        if (error) throw new Error(formatSupabaseError("文章教材取得", error));
+        return { items: data || [] };
+      }
+      const params = new URLSearchParams({ language, cefr_level: cefrLevel, limit: String(limit) });
+      if (domain) params.set("domain", domain);
+      const res = await fetch(`/api/materials/reading?${params}`);
+      if (!res.ok) throw new Error(`文章教材取得エラー: ${res.status}`);
+      return res.json();
+    },
+
+    async getDomains() {
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("domains")
+          .select("id, name_ja, sort_order")
+          .order("sort_order", { ascending: true });
+        if (error) throw new Error(formatSupabaseError("領域取得", error));
+        return { domains: data || [] };
+      }
+      const res = await fetch("/api/materials/domains");
+      if (!res.ok) throw new Error(`領域取得エラー: ${res.status}`);
+      return res.json();
+    }
+  };
+
   return {
+    materialsRepository,
     learningItemsRepository: {
       getLearningItems: (...args) =>
         shouldUseSupabase()
@@ -626,6 +821,10 @@ export function createRepositories({
         shouldUseSupabase()
           ? supabaseLearningSessionsRepository.getLearningSessions(...args)
           : localLearningSessionsRepository.getLearningSessions(...args),
+      getLearningSessionById: (...args) =>
+        shouldUseSupabase()
+          ? supabaseLearningSessionsRepository.getLearningSessionById(...args)
+          : localLearningSessionsRepository.getLearningSessionById(...args),
       createLearningSession: (...args) =>
         shouldUseSupabase()
           ? supabaseLearningSessionsRepository.createLearningSession(...args)
@@ -634,6 +833,24 @@ export function createRepositories({
         shouldUseSupabase()
           ? supabaseLearningSessionsRepository.deleteLearningSession(...args)
           : localLearningSessionsRepository.deleteLearningSession(...args)
+    },
+    studyLogsRepository: {
+      getStudyLogs: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.getStudyLogs(...args)
+          : localStudyLogsRepository.getStudyLogs(...args),
+      getStudyLogById: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.getStudyLogById(...args)
+          : localStudyLogsRepository.getStudyLogById(...args),
+      createStudyLog: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.createStudyLog(...args)
+          : localStudyLogsRepository.createStudyLog(...args),
+      deleteStudyLog: (...args) =>
+        shouldUseSupabase()
+          ? supabaseStudyLogsRepository.deleteStudyLog(...args)
+          : localStudyLogsRepository.deleteStudyLog(...args)
     }
   };
 }

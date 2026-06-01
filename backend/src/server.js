@@ -11,10 +11,18 @@ import {
   writeVocabularyNotebook
 } from "./storage.js";
 import {
+  listDomains,
+  listVocabularyItems,
+  getVocabularyItem,
+  listReadingMaterials,
+  getReadingMaterial
+} from "./materialsStorage.js";
+import {
   createLearningItem,
   createSrsData,
   deleteLearningItem,
   deleteLearningSession,
+  deleteStudyLog,
   deleteSrsData,
   getLearningItem,
   getLearningSession,
@@ -102,6 +110,65 @@ function sanitizeVocabularyItem(item) {
     masteryStatus: item.masteryStatus || "未学習"
   };
 }
+
+// ---- 教材API /api/materials/* -----------------------------------------------
+
+app.get("/api/materials/domains", async (_request, response) => {
+  try {
+    const domains = await listDomains();
+    response.json({ domains });
+  } catch (error) {
+    response.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/materials/vocabulary", async (request, response) => {
+  const { language, cefr_level, domain, limit, offset } = request.query;
+  try {
+    const { items, total } = await listVocabularyItems({ language, cefr_level, domain, limit, offset });
+    response.json({ items, total, language, cefr_level });
+  } catch (error) {
+    const status = error.message.includes("必須") ? 400 : 500;
+    response.status(status).json({ error: error.message });
+  }
+});
+
+app.get("/api/materials/vocabulary/:id", async (request, response) => {
+  try {
+    const item = await getVocabularyItem(request.params.id);
+    if (!item) {
+      return response.status(404).json({ error: "語彙教材が見つかりません。" });
+    }
+    return response.json({ item });
+  } catch (error) {
+    return response.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/materials/reading", async (request, response) => {
+  const { language, cefr_level, domain, limit, offset } = request.query;
+  try {
+    const { items, total } = await listReadingMaterials({ language, cefr_level, domain, limit, offset });
+    response.json({ items, total, language, cefr_level });
+  } catch (error) {
+    const status = error.message.includes("必須") ? 400 : 500;
+    response.status(status).json({ error: error.message });
+  }
+});
+
+app.get("/api/materials/reading/:id", async (request, response) => {
+  try {
+    const item = await getReadingMaterial(request.params.id);
+    if (!item) {
+      return response.status(404).json({ error: "文章教材が見つかりません。" });
+    }
+    return response.json({ item });
+  } catch (error) {
+    return response.status(500).json({ error: error.message });
+  }
+});
+
+// ---- 既存API ----------------------------------------------------------------
 
 app.get("/api/health", async (_request, response) => {
   response.json({
@@ -243,6 +310,16 @@ app.get("/api/study-logs/:id", async (request, response) => {
   }
 
   return response.json({ item });
+});
+
+app.delete("/api/study-logs/:id", async (request, response) => {
+  const deleted = await deleteStudyLog(request.params.id);
+
+  if (!deleted) {
+    return response.status(404).json({ error: "学習ログが見つかりません。" });
+  }
+
+  return response.json({ ok: true });
 });
 
 app.get("/api/history", async (_request, response) => {

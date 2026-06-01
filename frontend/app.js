@@ -8,9 +8,13 @@ const state = {
   isBusy: false,
   learningItems: [],
   historyItems: [],
+  learningSessions: [],
+  studyLogs: [],
   notebookItems: [],
   selectedLearningItemId: "",
   selectedHistoryId: "",
+  selectedSessionId: "",
+  selectedStudyLogId: "",
   selectedNotebookId: "",
   reviewQueue: [],
   reviewIndex: 0,
@@ -19,13 +23,24 @@ const state = {
   difficultReviewItems: [],
   selectedCourse: null,
   courseRun: null,
-  courseTimerId: null
+  courseTimerId: null,
+  dbVocabulary: [],
+  dbReadingMaterials: [],
+  courseFilters: { language: "english", cefrLevel: "A1", domain: "", duration: "" },
+  ttsVoices: [],
+  ttsRequestId: 0,
+  dictationSession: null,
+  recordingSession: null,
+  mediaRecorder: null,
+  recordingStream: null,
+  recordingChunks: []
 };
 
 const localStoreKeys = {
   learningItems: "language-study.learningItems",
   srsData: "language-study.srsData",
   learningSessions: "language-study.learningSessions",
+  studyLogs: "language-study.studyLogs",
   notebookItems: "language-study.notebookItems",
   historyItems: "language-study.historyItems"
 };
@@ -52,8 +67,15 @@ const elements = {
   learningItemNote: document.querySelector("#learning-item-note"),
   learningItemTags: document.querySelector("#learning-item-tags"),
   newLearningItem: document.querySelector("#new-learning-item"),
+  speakLearningItem: document.querySelector("#speak-learning-item"),
   deleteLearningItem: document.querySelector("#delete-learning-item"),
   coursePresetList: document.querySelector("#course-preset-list"),
+  courseFilterLanguage: document.querySelector("#course-filter-language"),
+  courseFilterCefr: document.querySelector("#course-filter-cefr"),
+  courseFilterDomain: document.querySelector("#course-filter-domain"),
+  courseFilterDuration: document.querySelector("#course-filter-duration"),
+  courseFilterApply: document.querySelector("#course-filter-apply"),
+  courseMaterialsMessage: document.querySelector("#course-materials-message"),
   courseSelectView: document.querySelector("#course-select-view"),
   courseConfirmView: document.querySelector("#course-confirm-view"),
   courseTimerView: document.querySelector("#course-timer-view"),
@@ -82,7 +104,13 @@ const elements = {
   courseSaveMessage: document.querySelector("#course-save-message"),
   courseSave: document.querySelector("#course-save"),
   courseHome: document.querySelector("#course-home"),
-  historyTableBody: document.querySelector("#history-table-body"),
+  historyTodayMinutes: document.querySelector("#history-today-minutes"),
+  historyWeekMinutes: document.querySelector("#history-week-minutes"),
+  historyStreakDays: document.querySelector("#history-streak-days"),
+  historyLatestSession: document.querySelector("#history-latest-session"),
+  historyLatestLog: document.querySelector("#history-latest-log"),
+  sessionHistoryTableBody: document.querySelector("#session-history-table-body"),
+  studyLogTableBody: document.querySelector("#study-log-table-body"),
   historyDetail: document.querySelector("#history-detail"),
   refreshHistory: document.querySelector("#refresh-history"),
   notebookTableBody: document.querySelector("#notebook-table-body"),
@@ -117,6 +145,20 @@ const elements = {
   reviewHard: document.querySelector("#review-hard"),
   reviewForgot: document.querySelector("#review-forgot"),
   reviewComplete: document.querySelector("#review-complete"),
+  ttsSupportMessage: document.querySelector("#tts-support-message"),
+  ttsText: document.querySelector("#tts-text"),
+  ttsLanguage: document.querySelector("#tts-language"),
+  ttsVoice: document.querySelector("#tts-voice"),
+  ttsRate: document.querySelector("#tts-rate"),
+  ttsRateValue: document.querySelector("#tts-rate-value"),
+  ttsPitch: document.querySelector("#tts-pitch"),
+  ttsPitchValue: document.querySelector("#tts-pitch-value"),
+  ttsPlay: document.querySelector("#tts-play"),
+  ttsStop: document.querySelector("#tts-stop"),
+  ttsPause: document.querySelector("#tts-pause"),
+  ttsResume: document.querySelector("#tts-resume"),
+  dictationPractice: document.querySelector("#dictation-practice"),
+  recordingPractice: document.querySelector("#recording-practice"),
   authLoggedOut: document.querySelector("#auth-logged-out"),
   authLoggedIn: document.querySelector("#auth-logged-in"),
   authEmail: document.querySelector("#auth-email"),
@@ -169,6 +211,21 @@ const coursePresets = [
       { id: "recording-10", title: "音読録音", type: "recording", minutes: 10, instructions: "音読して発音や流れを確認します。録音機能は今後接続します。" },
       { id: "writing-15", title: "作文・要約", type: "writing", minutes: 15, instructions: "学習内容を使って作文または要約を書きます。" },
       { id: "log-10", title: "添削プロンプト生成・学習ログ", type: "log", minutes: 10, instructions: "添削に出したい内容や今日の学習ログを整理します。" }
+    ]
+  },
+  {
+    id: "course-120",
+    name: "120分コース",
+    totalMinutes: 120,
+    description: "週末の集中学習向け",
+    steps: [
+      { id: "srs-20", title: "SRS復習", type: "srs", minutes: 20, instructions: "今日復習すべき学習アイテムをしっかり確認します。" },
+      { id: "vocabulary-20", title: "語彙学習", type: "reading", minutes: 20, instructions: "新しい語彙を文脈と一緒に確認します。" },
+      { id: "grammar-20", title: "精読・文法分析", type: "grammar", minutes: 20, instructions: "文法や例文の構造を分析します。" },
+      { id: "dictation-15", title: "ディクテーション", type: "dictation", minutes: 15, instructions: "聞き取った内容を書き取る練習です。" },
+      { id: "shadowing-15", title: "シャドーイング", type: "shadowing", minutes: 15, instructions: "お手本に合わせて発話練習します。" },
+      { id: "writing-20", title: "作文", type: "writing", minutes: 20, instructions: "学習内容を使って作文または要約を書きます。" },
+      { id: "log-10b", title: "学習ログ", type: "log", minutes: 10, instructions: "添削に出したい内容や今日の学習ログを整理します。" }
     ]
   }
 ];
@@ -286,6 +343,9 @@ function initAuth() {
     if (state.currentPage === "review") {
       loadReviewItems();
     }
+    if (state.currentPage === "history") {
+      loadHistory();
+    }
   });
 
   elements.authLogin.addEventListener("click", handleLogin);
@@ -390,6 +450,1011 @@ function learningItemTypeLabel(type) {
   return labels[type] || type;
 }
 
+function supportsSpeechSynthesis() {
+  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function languageToSpeechLang(language) {
+  const normalized = String(language || "").toLowerCase();
+  if (normalized.startsWith("en") || normalized === "english") {
+    return "en-US";
+  }
+  if (normalized.startsWith("zh") || normalized === "chinese") {
+    return "zh-CN";
+  }
+  if (normalized.startsWith("ja") || normalized === "japanese") {
+    return "ja-JP";
+  }
+  return "";
+}
+
+function learningItemSpeechText(item) {
+  return [item?.content, item?.example, item?.title].find((value) => String(value || "").trim()) || "";
+}
+
+function setTtsMessage(message, isError = false) {
+  if (!elements.ttsSupportMessage) {
+    return;
+  }
+
+  elements.ttsSupportMessage.textContent = message;
+  elements.ttsSupportMessage.classList.toggle("auth-message--error", isError);
+}
+
+function voiceLanguageScore(voice, language) {
+  if (!language) {
+    return voice.default ? 0 : 1;
+  }
+
+  const voiceLang = String(voice.lang || "").toLowerCase();
+  const requested = language.toLowerCase();
+  const base = requested.split("-")[0];
+
+  if (voiceLang === requested) {
+    return 0;
+  }
+  if (voiceLang.startsWith(base)) {
+    return 1;
+  }
+  if (voice.default) {
+    return 2;
+  }
+  return 3;
+}
+
+function renderTtsVoiceOptions() {
+  if (!elements.ttsVoice) {
+    return;
+  }
+
+  const selectedLanguage = elements.ttsLanguage.value;
+  const currentVoice = elements.ttsVoice.value;
+  const voices = [...state.ttsVoices].sort((a, b) => {
+    const scoreDiff = voiceLanguageScore(a, selectedLanguage) - voiceLanguageScore(b, selectedLanguage);
+    return scoreDiff || a.name.localeCompare(b.name);
+  });
+
+  elements.ttsVoice.innerHTML = `
+    <option value="">ブラウザの自動選択</option>
+    ${voices
+      .map(
+        (voice) =>
+          `<option value="${escapeHtml(voice.voiceURI)}">${escapeHtml(voice.name)} (${escapeHtml(voice.lang || "unknown")})${voice.default ? " / default" : ""}</option>`
+      )
+      .join("")}
+  `;
+
+  if (voices.some((voice) => voice.voiceURI === currentVoice)) {
+    elements.ttsVoice.value = currentVoice;
+  }
+
+  if (!voices.length) {
+    setTtsMessage("利用可能な音声をまだ取得できていません。ブラウザが読み込み次第、一覧を更新します。");
+  } else {
+    setTtsMessage("読み上げの準備ができています。");
+  }
+}
+
+function loadTtsVoices() {
+  if (!supportsSpeechSynthesis()) {
+    setTtsMessage("このブラウザは音声読み上げに対応していません。", true);
+    return;
+  }
+
+  state.ttsVoices = window.speechSynthesis.getVoices() || [];
+  renderTtsVoiceOptions();
+}
+
+function selectedTtsVoice() {
+  return state.ttsVoices.find((voice) => voice.voiceURI === elements.ttsVoice.value) || null;
+}
+
+function updateTtsSliderLabels() {
+  elements.ttsRateValue.textContent = Number(elements.ttsRate.value).toFixed(2);
+  elements.ttsPitchValue.textContent = Number(elements.ttsPitch.value).toFixed(2);
+}
+
+function setTtsText(text, language = "") {
+  elements.ttsText.value = text || "";
+  elements.ttsLanguage.value = languageToSpeechLang(language);
+  renderTtsVoiceOptions();
+}
+
+function speakText(text, options = {}) {
+  if (!supportsSpeechSynthesis()) {
+    setTtsMessage("このブラウザは音声読み上げに対応していません。", true);
+    setStatus("このブラウザは音声読み上げに対応していません。");
+    return false;
+  }
+
+  const value = String(text || elements.ttsText.value || "").trim();
+  if (!value) {
+    setTtsMessage("読み上げるテキストを入力してください。", true);
+    setStatus("読み上げるテキストを入力してください。");
+    return false;
+  }
+
+  state.ttsRequestId += 1;
+  const requestId = state.ttsRequestId;
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(value);
+  const language = options.language || elements.ttsLanguage.value;
+  const voice = options.voice || selectedTtsVoice();
+
+  if (language) {
+    utterance.lang = language;
+  }
+  if (voice) {
+    utterance.voice = voice;
+  }
+
+  utterance.rate = Number(options.rate ?? elements.ttsRate.value ?? 1);
+  utterance.pitch = Number(options.pitch ?? elements.ttsPitch.value ?? 1);
+  utterance.onend = () => {
+    if (requestId !== state.ttsRequestId) {
+      return;
+    }
+    setTtsMessage("読み上げが完了しました。");
+    setStatus("読み上げが完了しました。");
+  };
+  utterance.onerror = (event) => {
+    if (requestId !== state.ttsRequestId || ["canceled", "interrupted"].includes(event.error)) {
+      return;
+    }
+    setTtsMessage("読み上げ中にエラーが発生しました。別の音声を選んで試してください。", true);
+    setStatus("読み上げ中にエラーが発生しました。");
+  };
+
+  window.speechSynthesis.speak(utterance);
+  setTtsMessage("読み上げ中です。");
+  setStatus("読み上げ中です。");
+  return true;
+}
+
+function speakLearningItem(item, options = {}) {
+  const text = learningItemSpeechText(item);
+  const language = languageToSpeechLang(item?.language);
+  setTtsText(text, language);
+  return speakText(text, { language, ...options });
+}
+
+function dictationAnswerText(item) {
+  return [item?.content, item?.example].find((value) => String(value || "").trim()) || "";
+}
+
+function dictationTargets(items = state.learningItems) {
+  return items.filter((item) => ["sentence", "listening"].includes(item.type) && dictationAnswerText(item));
+}
+
+function tokenizeDictationText(text, language) {
+  const value = String(text || "").trim();
+  if (!value) {
+    return [];
+  }
+
+  if (language === "chinese" || language === "japanese") {
+    return Array.from(value.replace(/\s+/g, ""));
+  }
+
+  return value.split(/\s+/).filter(Boolean);
+}
+
+function normalizeDictationToken(token) {
+  return String(token || "")
+    .toLowerCase()
+    .replace(/^[.,!?;:'"()［\]{}]+|[.,!?;:'"()［\]{}]+$/g, "");
+}
+
+function compareDictationAnswer(correctText, userText, language) {
+  const correctTokens = tokenizeDictationText(correctText, language);
+  const userTokens = tokenizeDictationText(userText, language);
+  const maxLength = Math.max(correctTokens.length, userTokens.length);
+  const results = [];
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const correct = correctTokens[index] || "";
+    const actual = userTokens[index] || "";
+
+    if (correct && actual && normalizeDictationToken(correct) === normalizeDictationToken(actual)) {
+      results.push({ type: "match", correct, actual });
+    } else if (correct && !actual) {
+      results.push({ type: "missing", correct, actual: "" });
+    } else if (!correct && actual) {
+      results.push({ type: "extra", correct: "", actual });
+    } else {
+      results.push({ type: "different", correct, actual });
+    }
+  }
+
+  return results;
+}
+
+function dictationRatingToSrsOutcome(rating) {
+  const map = {
+    great: "easy",
+    ok: "normal",
+    hard: "hard",
+    failed: "forgot"
+  };
+  return map[rating] || "normal";
+}
+
+function dictationRatingLabel(rating) {
+  const labels = {
+    great: "よくできた",
+    ok: "だいたいできた",
+    hard: "難しかった",
+    failed: "できなかった"
+  };
+  return labels[rating] || rating;
+}
+
+function practiceRatingToSrsOutcome(rating) {
+  const map = {
+    great: "easy",
+    normal: "normal",
+    hard: "hard",
+    retry: "forgot"
+  };
+  return map[rating] || "normal";
+}
+
+function practiceRatingLabel(rating) {
+  const labels = {
+    great: "よくできた",
+    normal: "普通",
+    hard: "難しかった",
+    retry: "やり直したい"
+  };
+  return labels[rating] || rating;
+}
+
+async function updateSrsAfterPractice(itemId, outcome) {
+  try {
+    return await srsRepository.updateSrsAfterReview(itemId, outcome);
+  } catch (error) {
+    if (!String(error.message || "").includes("SRSデータが見つかりません")) {
+      throw error;
+    }
+
+    await createInitialSrsData(itemId);
+    return srsRepository.updateSrsAfterReview(itemId, outcome);
+  }
+}
+
+function supportsMediaRecorder() {
+  return "MediaRecorder" in window && Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
+function recordingPracticeText(item) {
+  return [item?.content, item?.example, item?.title].find((value) => String(value || "").trim()) || "";
+}
+
+function recordingTargets(items = state.learningItems) {
+  return items.filter((item) => {
+    const hasPracticeText = Boolean(item.content || item.example);
+    if (!hasPracticeText) {
+      return false;
+    }
+
+    if (["sentence", "listening"].includes(item.type)) {
+      return true;
+    }
+
+    return ["vocabulary", "grammar"].includes(item.type) && Boolean(item.example);
+  });
+}
+
+function recordingChecklistForLanguage(language) {
+  if (language === "english") {
+    return [
+      "語尾まで発音できた",
+      "強く読む単語を意識できた",
+      "音のつながりを真似できた",
+      "r / l / th / v / f などを意識できた",
+      "日本語っぽい区切りにならなかった"
+    ];
+  }
+
+  if (language === "chinese") {
+    return ["声調を意識できた", "ピンイン通りに読めた", "軽声を意識できた", "そり舌音を意識できた", "文全体のリズムを真似できた"];
+  }
+
+  return ["聞き返して違和感を確認できた", "もう一度練習したい"];
+}
+
+function createRecordingSession(context = "standalone") {
+  return {
+    context,
+    queue: recordingTargets(),
+    index: 0,
+    status: "idle",
+    audioUrl: "",
+    completedCount: 0,
+    evaluated: false,
+    difficultItems: [],
+    checklist: [],
+    error: "",
+    complete: false
+  };
+}
+
+function currentRecordingEntry() {
+  if (!state.recordingSession) {
+    return null;
+  }
+
+  return state.recordingSession.queue[state.recordingSession.index] || null;
+}
+
+function releaseRecordingAudioUrl(session = state.recordingSession) {
+  if (session?.audioUrl) {
+    URL.revokeObjectURL(session.audioUrl);
+    session.audioUrl = "";
+  }
+}
+
+function stopRecordingTracks() {
+  state.recordingStream?.getTracks().forEach((track) => track.stop());
+  state.recordingStream = null;
+}
+
+function stopActiveRecording() {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+    state.mediaRecorder.stop();
+  } else {
+    stopRecordingTracks();
+  }
+}
+
+function createDictationSession(context = "standalone") {
+  return {
+    context,
+    queue: dictationTargets(),
+    index: 0,
+    revealed: false,
+    evaluated: false,
+    completedCount: 0,
+    difficultItems: [],
+    inputText: "",
+    error: "",
+    complete: false
+  };
+}
+
+function currentDictationEntry() {
+  if (!state.dictationSession) {
+    return null;
+  }
+
+  return state.dictationSession.queue[state.dictationSession.index] || null;
+}
+
+function renderDictationDiff(diff) {
+  if (!diff.length) {
+    return "<p class=\"muted\">比較する語がありません。</p>";
+  }
+
+  return `
+    <div class="dictation-diff">
+      ${diff
+        .map((part) => {
+          const label = part.type === "match" ? "一致" : part.type === "missing" ? "抜け" : part.type === "extra" ? "余分" : "違い";
+          const text =
+            part.type === "different"
+              ? `${part.actual || "未入力"} → ${part.correct || "なし"}`
+              : part.actual || part.correct;
+          return `<span class="dictation-token dictation-token--${part.type}" title="${escapeHtml(label)}">${escapeHtml(text)}</span>`;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDictationPractice(root = elements.dictationPractice, options = {}) {
+  if (!root) {
+    return;
+  }
+
+  const context = options.context || "standalone";
+  if (!state.dictationSession || state.dictationSession.context !== context || options.reset) {
+    state.dictationSession = createDictationSession(context);
+  }
+
+  const session = state.dictationSession;
+
+  if (!session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <p>ディクテーション対象の文章がありません。</p>
+        <p class="muted">sentenceまたはlisteningタイプで、contentまたはexampleが入ったLearningItemを登録してください。</p>
+        <button type="button" class="soft-button dictation-reload">再読み込み</button>
+      </div>
+    `;
+    attachDictationEvents(root);
+    return;
+  }
+
+  if (session.complete || session.index >= session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <h3>ディクテーション完了</h3>
+        <p>今回解いた問題数: ${escapeHtml(String(session.completedCount))}</p>
+        ${
+          session.difficultItems.length
+            ? `<h4>難しかった項目</h4><ul class="mistake-list">${session.difficultItems
+                .map((item) => `<li>${escapeHtml(item.title || "")}（${escapeHtml(learningItemTypeLabel(item.type))}）</li>`)
+                .join("")}</ul>`
+            : "<p>難しい項目はありませんでした。</p>"
+        }
+        <button type="button" class="soft-button dictation-restart">もう一度練習</button>
+      </div>
+    `;
+    attachDictationEvents(root);
+    return;
+  }
+
+  const item = currentDictationEntry();
+  const answer = dictationAnswerText(item);
+  const diff = session.revealed ? compareDictationAnswer(answer, session.inputText, item.language) : [];
+  const rateOptions = [
+    ["0.75", "0.75倍"],
+    ["1", "1.0倍"],
+    ["1.25", "1.25倍"]
+  ];
+
+  root.innerHTML = `
+    <div class="dictation-practice">
+      <div class="review-toolbar">
+        <div class="review-stat">
+          <span>今日のディクテーション対象</span>
+          <strong>${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+        <div class="review-stat">
+          <span>現在の問題</span>
+          <strong>${escapeHtml(String(session.index + 1))} / ${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+      </div>
+      ${session.error ? `<p class="auth-message auth-message--error">${escapeHtml(session.error)}</p>` : ""}
+      <section class="section-card">
+        <p class="eyebrow">${escapeHtml(learningItemTypeLabel(item.type))} / ${escapeHtml(languageLabel(item.language))}</p>
+        <h3>${escapeHtml(item.title || "ディクテーション問題")}</h3>
+        <p class="muted">音声を聞いて、聞き取った文章を入力してください。</p>
+        <div class="field-row">
+          <label>
+            速度
+            <select class="dictation-rate">
+              ${rateOptions.map(([value, label]) => `<option value="${value}" ${value === "1" ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+          </label>
+          <div class="dictation-audio-actions">
+            <button type="button" class="soft-button dictation-play">音声再生</button>
+          </div>
+        </div>
+      </section>
+      <label>
+        聞き取った文章
+        <textarea class="dictation-input" rows="5" placeholder="ここに聞き取った文章を入力">${escapeHtml(session.inputText)}</textarea>
+      </label>
+      <div class="mini-actions">
+        <button type="button" class="soft-button dictation-reveal" ${session.revealed ? "disabled" : ""}>答えを見る</button>
+        <button type="button" class="soft-button dictation-next" ${session.evaluated ? "" : "disabled"}>次へ</button>
+        <button type="button" class="soft-button dictation-end">終了</button>
+      </div>
+      ${
+        session.revealed
+          ? `
+            <section class="answer-panel">
+              <h4>ユーザー入力</h4>
+              <p>${escapeHtml(session.inputText || "未入力")}</p>
+              <h4>正解文</h4>
+              <p>${escapeHtml(answer)}</p>
+              <h4>差分</h4>
+              ${renderDictationDiff(diff)}
+              <div class="mini-actions dictation-rating-actions">
+                <button type="button" class="review-rating-button dictation-rate-button" data-rating="great" ${session.evaluated ? "disabled" : ""}>よくできた</button>
+                <button type="button" class="review-rating-button dictation-rate-button" data-rating="ok" ${session.evaluated ? "disabled" : ""}>だいたいできた</button>
+                <button type="button" class="review-rating-button soft-button dictation-rate-button" data-rating="hard" ${session.evaluated ? "disabled" : ""}>難しかった</button>
+                <button type="button" class="review-rating-button soft-button dictation-rate-button" data-rating="failed" ${session.evaluated ? "disabled" : ""}>できなかった</button>
+              </div>
+            </section>
+          `
+          : ""
+      }
+    </div>
+  `;
+
+  attachDictationEvents(root);
+}
+
+function attachDictationEvents(root) {
+  root.querySelector(".dictation-reload")?.addEventListener("click", async () => {
+    await loadLearningItems();
+    renderDictationPractice(root, { context: state.dictationSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".dictation-restart")?.addEventListener("click", () => {
+    renderDictationPractice(root, { context: state.dictationSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".dictation-input")?.addEventListener("input", (event) => {
+    if (state.dictationSession) {
+      state.dictationSession.inputText = event.target.value;
+    }
+  });
+
+  root.querySelector(".dictation-play")?.addEventListener("click", () => {
+    const item = currentDictationEntry();
+    if (!item) {
+      return;
+    }
+    const rate = Number(root.querySelector(".dictation-rate")?.value || 1);
+    const answer = dictationAnswerText(item);
+    setTtsText(answer, item.language);
+    speakText(answer, { language: languageToSpeechLang(item.language), rate });
+  });
+
+  root.querySelector(".dictation-reveal")?.addEventListener("click", () => {
+    if (!state.dictationSession) {
+      return;
+    }
+    const input = root.querySelector(".dictation-input")?.value || "";
+    state.dictationSession.inputText = input;
+    state.dictationSession.revealed = true;
+    state.dictationSession.error = "";
+    renderDictationPractice(root, { context: state.dictationSession.context });
+    setStatus("正解を表示しました。自己評価を選んでください。");
+  });
+
+  root.querySelectorAll(".dictation-rate-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await submitDictationRating(button.dataset.rating, root);
+    });
+  });
+
+  root.querySelector(".dictation-next")?.addEventListener("click", () => {
+    if (!state.dictationSession) {
+      return;
+    }
+    state.dictationSession.index += 1;
+    state.dictationSession.revealed = false;
+    state.dictationSession.evaluated = false;
+    state.dictationSession.inputText = "";
+    state.dictationSession.error = "";
+    renderDictationPractice(root, { context: state.dictationSession.context });
+  });
+
+  root.querySelector(".dictation-end")?.addEventListener("click", () => {
+    if (!state.dictationSession) {
+      return;
+    }
+    state.dictationSession.complete = true;
+    renderDictationPractice(root, { context: state.dictationSession.context });
+  });
+}
+
+async function submitDictationRating(rating, root) {
+  const session = state.dictationSession;
+  const item = currentDictationEntry();
+
+  if (!session || !item || !session.revealed) {
+    setStatus("先に答えを表示してください。");
+    return;
+  }
+
+  await withBusy(async () => {
+    const outcome = dictationRatingToSrsOutcome(rating);
+    await updateSrsAfterPractice(item.id, outcome);
+    session.evaluated = true;
+    session.completedCount += 1;
+
+    if (session.context === "course" && state.courseRun) {
+      state.courseRun.dictationCount += 1;
+      state.courseRun.reviewedItemIds = uniqueValues([...state.courseRun.reviewedItemIds, item.id]);
+      if (outcome === "hard" || outcome === "forgot") {
+        state.courseRun.mistakeItemIds = uniqueValues([...state.courseRun.mistakeItemIds, item.id]);
+      }
+    }
+
+    if (outcome === "hard" || outcome === "forgot") {
+      session.difficultItems.push(item);
+    }
+
+    session.error = "";
+    renderDictationPractice(root, { context: session.context });
+    setStatus(`ディクテーション結果を保存しました: ${dictationRatingLabel(rating)}`);
+  }, "ディクテーション結果を保存しています...");
+
+  if (state.dictationSession && !state.dictationSession.evaluated) {
+    state.dictationSession.error = "SRS更新に失敗しました。ネットワークまたは保存先を確認してください。";
+    renderDictationPractice(root, { context: state.dictationSession.context });
+  }
+}
+
+function renderRecordingPractice(root = elements.recordingPractice, options = {}) {
+  if (!root) {
+    return;
+  }
+
+  const context = options.context || "standalone";
+  if (!state.recordingSession || state.recordingSession.context !== context || options.reset) {
+    releaseRecordingAudioUrl();
+    state.recordingSession = createRecordingSession(context);
+  }
+
+  const session = state.recordingSession;
+  const recorderSupported = supportsMediaRecorder();
+
+  if (!recorderSupported) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <p>このブラウザは録音に対応していません。</p>
+        <p class="muted">お手本音声の再生と練習文の確認はできますが、MediaRecorder APIが必要です。</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (!session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <p>音読録音の対象文がありません。</p>
+        <p class="muted">sentenceまたはlisteningタイプのcontent/example、またはvocabulary/grammarのexampleを登録してください。</p>
+        <button type="button" class="soft-button recording-reload">再読み込み</button>
+      </div>
+    `;
+    attachRecordingEvents(root);
+    return;
+  }
+
+  if (session.complete || session.index >= session.queue.length) {
+    root.innerHTML = `
+      <div class="empty-state">
+        <h3>音読録音完了</h3>
+        <p>今回録音した回数: ${escapeHtml(String(session.completedCount))}</p>
+        ${
+          session.difficultItems.length
+            ? `<h4>難しかった項目</h4><ul class="mistake-list">${session.difficultItems
+                .map((item) => `<li>${escapeHtml(item.title || "")}（${escapeHtml(learningItemTypeLabel(item.type))}）</li>`)
+                .join("")}</ul>`
+            : "<p>難しい項目はありませんでした。</p>"
+        }
+        <button type="button" class="soft-button recording-restart">もう一度練習</button>
+      </div>
+    `;
+    attachRecordingEvents(root);
+    return;
+  }
+
+  const item = currentRecordingEntry();
+  const practiceText = recordingPracticeText(item);
+  const checklist = recordingChecklistForLanguage(item.language);
+  const rateOptions = [
+    ["0.75", "0.75倍"],
+    ["1", "1.0倍"],
+    ["1.25", "1.25倍"]
+  ];
+
+  root.innerHTML = `
+    <div class="recording-practice">
+      <div class="review-toolbar">
+        <div class="review-stat">
+          <span>音読録音対象</span>
+          <strong>${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+        <div class="review-stat">
+          <span>現在の文</span>
+          <strong>${escapeHtml(String(session.index + 1))} / ${escapeHtml(String(session.queue.length))}</strong>
+        </div>
+        <div class="review-stat">
+          <span>録音回数</span>
+          <strong>${escapeHtml(String(session.completedCount))}</strong>
+        </div>
+      </div>
+      ${session.error ? `<p class="auth-message auth-message--error">${escapeHtml(session.error)}</p>` : ""}
+      <section class="section-card">
+        <p class="eyebrow">${escapeHtml(learningItemTypeLabel(item.type))} / ${escapeHtml(languageLabel(item.language))}</p>
+        <h3>${escapeHtml(item.title || "音読練習")}</h3>
+        <p class="recording-practice-text">${escapeHtml(practiceText)}</p>
+        <div class="field-row">
+          <label>
+            お手本速度
+            <select class="recording-rate">
+              ${rateOptions.map(([value, label]) => `<option value="${value}" ${value === "1" ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+          </label>
+          <div class="dictation-audio-actions">
+            <button type="button" class="soft-button recording-model-play">お手本音声再生</button>
+          </div>
+        </div>
+      </section>
+      <section class="section-card">
+        <h4>自分の音読</h4>
+        <p class="muted">${
+          session.status === "recording"
+            ? "録音中です。読み終えたら停止してください。"
+            : session.audioUrl
+              ? "録音を聞き返して、お手本と比べてください。"
+              : "マイク許可後、音読を録音できます。"
+        }</p>
+        <div class="mini-actions">
+          <button type="button" class="soft-button recording-start" ${session.status === "recording" ? "disabled" : ""}>録音開始</button>
+          <button type="button" class="soft-button recording-stop" ${session.status === "recording" ? "" : "disabled"}>録音停止</button>
+          <button type="button" class="soft-button recording-replay" ${session.audioUrl ? "" : "disabled"}>自分の録音を再生</button>
+          <button type="button" class="soft-button recording-retake" ${session.audioUrl || session.status === "recording" ? "" : "disabled"}>録音やり直し</button>
+        </div>
+        ${session.audioUrl ? `<audio class="recording-audio" controls src="${escapeHtml(session.audioUrl)}"></audio>` : ""}
+      </section>
+      <section class="section-card">
+        <h4>自己評価チェック</h4>
+        <div class="recording-checklist">
+          ${checklist
+            .map(
+              (label) => `
+                <label class="checkbox-row">
+                  <input type="checkbox" class="recording-check" value="${escapeHtml(label)}" ${session.checklist.includes(label) ? "checked" : ""} />
+                  <span>${escapeHtml(label)}</span>
+                </label>
+              `
+            )
+            .join("")}
+        </div>
+        <div class="mini-actions recording-rating-actions">
+          <button type="button" class="review-rating-button recording-rate-button" data-rating="great" ${session.evaluated ? "disabled" : ""}>よくできた</button>
+          <button type="button" class="review-rating-button recording-rate-button" data-rating="normal" ${session.evaluated ? "disabled" : ""}>普通</button>
+          <button type="button" class="review-rating-button soft-button recording-rate-button" data-rating="hard" ${session.evaluated ? "disabled" : ""}>難しかった</button>
+          <button type="button" class="review-rating-button soft-button recording-rate-button" data-rating="retry" ${session.evaluated ? "disabled" : ""}>やり直したい</button>
+        </div>
+      </section>
+      <div class="mini-actions">
+        <button type="button" class="soft-button recording-next" ${session.evaluated ? "" : "disabled"}>次の文へ</button>
+        <button type="button" class="soft-button recording-end">終了</button>
+      </div>
+    </div>
+  `;
+
+  attachRecordingEvents(root);
+}
+
+function attachRecordingEvents(root) {
+  root.querySelector(".recording-reload")?.addEventListener("click", async () => {
+    await loadLearningItems();
+    renderRecordingPractice(root, { context: state.recordingSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".recording-restart")?.addEventListener("click", () => {
+    renderRecordingPractice(root, { context: state.recordingSession?.context || "standalone", reset: true });
+  });
+
+  root.querySelector(".recording-model-play")?.addEventListener("click", () => {
+    const item = currentRecordingEntry();
+    if (!item) {
+      return;
+    }
+    const text = recordingPracticeText(item);
+    const rate = Number(root.querySelector(".recording-rate")?.value || 1);
+    setTtsText(text, item.language);
+    speakText(text, { language: languageToSpeechLang(item.language), rate });
+  });
+
+  root.querySelector(".recording-start")?.addEventListener("click", async () => {
+    await startRecordingPractice(root);
+  });
+
+  root.querySelector(".recording-stop")?.addEventListener("click", () => {
+    stopActiveRecording();
+  });
+
+  root.querySelector(".recording-replay")?.addEventListener("click", () => {
+    const session = state.recordingSession;
+    if (!session?.audioUrl) {
+      setStatus("再生できる録音がありません。");
+      return;
+    }
+    const audio = new Audio(session.audioUrl);
+    audio.play().catch(() => setStatus("録音の再生に失敗しました。"));
+  });
+
+  root.querySelector(".recording-retake")?.addEventListener("click", () => {
+    stopActiveRecording();
+    if (state.recordingSession) {
+      releaseRecordingAudioUrl(state.recordingSession);
+      state.recordingSession.status = "idle";
+      state.recordingSession.evaluated = false;
+      state.recordingSession.error = "";
+      renderRecordingPractice(root, { context: state.recordingSession.context });
+    }
+  });
+
+  root.querySelectorAll(".recording-check").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      if (!state.recordingSession) {
+        return;
+      }
+      const checked = [...root.querySelectorAll(".recording-check:checked")].map((input) => input.value);
+      state.recordingSession.checklist = checked;
+    });
+  });
+
+  root.querySelectorAll(".recording-rate-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await submitRecordingRating(button.dataset.rating, root);
+    });
+  });
+
+  root.querySelector(".recording-next")?.addEventListener("click", () => {
+    if (!state.recordingSession) {
+      return;
+    }
+    releaseRecordingAudioUrl(state.recordingSession);
+    state.recordingSession.index += 1;
+    state.recordingSession.status = "idle";
+    state.recordingSession.audioUrl = "";
+    state.recordingSession.evaluated = false;
+    state.recordingSession.checklist = [];
+    state.recordingSession.error = "";
+    renderRecordingPractice(root, { context: state.recordingSession.context });
+  });
+
+  root.querySelector(".recording-end")?.addEventListener("click", () => {
+    if (!state.recordingSession) {
+      return;
+    }
+    stopActiveRecording();
+    state.recordingSession.complete = true;
+    renderRecordingPractice(root, { context: state.recordingSession.context });
+  });
+}
+
+async function startRecordingPractice(root) {
+  const session = state.recordingSession;
+  if (!session) {
+    return;
+  }
+
+  if (!supportsMediaRecorder()) {
+    session.error = "このブラウザは録音に対応していません。";
+    renderRecordingPractice(root, { context: session.context });
+    return;
+  }
+
+  try {
+    stopActiveRecording();
+    releaseRecordingAudioUrl(session);
+    state.recordingChunks = [];
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    state.recordingStream = stream;
+    state.mediaRecorder = recorder;
+
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data?.size) {
+        state.recordingChunks.push(event.data);
+      }
+    });
+
+    recorder.addEventListener("stop", () => {
+      const mimeType = state.recordingChunks[0]?.type || "audio/webm";
+      const blob = new Blob(state.recordingChunks, { type: mimeType });
+      releaseRecordingAudioUrl(session);
+      session.audioUrl = URL.createObjectURL(blob);
+      session.status = "recorded";
+      session.evaluated = false;
+      session.completedCount += 1;
+      session.error = "";
+
+      if (session.context === "course" && state.courseRun) {
+        state.courseRun.recordingCount += 1;
+      }
+
+      stopRecordingTracks();
+      state.mediaRecorder = null;
+      state.recordingChunks = [];
+      renderRecordingPractice(root, { context: session.context });
+      setStatus("録音を保存しました。ブラウザ内の一時データとして再生できます。");
+    });
+
+    recorder.start();
+    session.status = "recording";
+    session.error = "";
+    renderRecordingPractice(root, { context: session.context });
+    setStatus("録音を開始しました。");
+  } catch (error) {
+    session.status = "idle";
+    session.error = error.name === "NotAllowedError" ? "マイク権限が拒否されました。ブラウザの権限設定を確認してください。" : "録音を開始できませんでした。";
+    stopRecordingTracks();
+    state.mediaRecorder = null;
+    renderRecordingPractice(root, { context: session.context });
+  }
+}
+
+async function submitRecordingRating(rating, root) {
+  const session = state.recordingSession;
+  const item = currentRecordingEntry();
+
+  if (!session || !item) {
+    setStatus("音読録音の対象がありません。");
+    return;
+  }
+
+  if (!session.audioUrl) {
+    session.error = "先に録音してください。";
+    renderRecordingPractice(root, { context: session.context });
+    return;
+  }
+
+  await withBusy(async () => {
+    const outcome = practiceRatingToSrsOutcome(rating);
+    await updateSrsAfterPractice(item.id, outcome);
+    session.evaluated = true;
+
+    if (session.context === "course" && state.courseRun) {
+      state.courseRun.reviewedItemIds = uniqueValues([...state.courseRun.reviewedItemIds, item.id]);
+      if (outcome === "hard" || outcome === "forgot") {
+        state.courseRun.mistakeItemIds = uniqueValues([...state.courseRun.mistakeItemIds, item.id]);
+      }
+    }
+
+    if (outcome === "hard" || outcome === "forgot") {
+      session.difficultItems.push(item);
+    }
+
+    session.error = "";
+    renderRecordingPractice(root, { context: session.context });
+    setStatus(`音読録音の自己評価を保存しました: ${practiceRatingLabel(rating)}`);
+  }, "音読録音の自己評価を保存しています...");
+
+  if (state.recordingSession && !state.recordingSession.evaluated) {
+    state.recordingSession.error = "SRS更新に失敗しました。ネットワークまたは保存先を確認してください。";
+    renderRecordingPractice(root, { context: state.recordingSession.context });
+  }
+}
+
+function pauseSpeech() {
+  if (supportsSpeechSynthesis() && window.speechSynthesis.speaking) {
+    window.speechSynthesis.pause();
+    setTtsMessage("読み上げを一時停止しました。");
+    setStatus("読み上げを一時停止しました。");
+  }
+}
+
+function resumeSpeech() {
+  if (supportsSpeechSynthesis()) {
+    window.speechSynthesis.resume();
+    setTtsMessage("読み上げを再開しました。");
+    setStatus("読み上げを再開しました。");
+  }
+}
+
+function stopSpeech() {
+  if (supportsSpeechSynthesis()) {
+    state.ttsRequestId += 1;
+    window.speechSynthesis.cancel();
+    setTtsMessage("読み上げを停止しました。");
+    setStatus("読み上げを停止しました。");
+  }
+}
+
+function initTextToSpeech() {
+  if (!supportsSpeechSynthesis()) {
+    [elements.ttsPlay, elements.ttsStop, elements.ttsPause, elements.ttsResume].forEach((button) => {
+      button.disabled = true;
+    });
+    setTtsMessage("このブラウザは音声読み上げに対応していません。", true);
+    return;
+  }
+
+  updateTtsSliderLabels();
+  loadTtsVoices();
+
+  if ("addEventListener" in window.speechSynthesis) {
+    window.speechSynthesis.addEventListener("voiceschanged", loadTtsVoices);
+  } else {
+    window.speechSynthesis.onvoiceschanged = loadTtsVoices;
+  }
+}
+
 function modeLabel(mode) {
   const labels = {
     manual_vocabulary: "単語登録",
@@ -400,6 +1465,10 @@ function modeLabel(mode) {
 }
 
 function switchPage(pageId) {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive" && !["recording", "course"].includes(pageId)) {
+    stopActiveRecording();
+  }
+
   state.currentPage = pageId;
 
   elements.navButtons.forEach((button) => {
@@ -429,8 +1498,20 @@ function switchPage(pageId) {
   if (pageId === "course") {
     renderCoursePresetList();
     loadLearningItems();
+    loadCourseDomains();
   }
 
+  if (pageId === "audio") {
+    loadTtsVoices();
+  }
+
+  if (pageId === "dictation") {
+    loadDictationPractice();
+  }
+
+  if (pageId === "recording") {
+    loadRecordingPractice();
+  }
 }
 
 async function fetchJson(url, options = {}) {
@@ -739,6 +1820,45 @@ async function handleLocalJson(url, options = {}) {
     }
   }
 
+  if (path === "/api/study-logs" && method === "GET") {
+    return localJsonResponse({ items: sortByCreatedAtDesc(readLocalCollection(localStoreKeys.studyLogs)) });
+  }
+
+  if (path === "/api/study-logs" && method === "POST") {
+    const items = readLocalCollection(localStoreKeys.studyLogs);
+    const timestamp = new Date().toISOString();
+    const item = {
+      id: body.id || createLocalId(),
+      date: body.date || timestamp.slice(0, 10),
+      learnedItems: Array.isArray(body.learnedItems) ? body.learnedItems : [],
+      mistakes: Array.isArray(body.mistakes) ? body.mistakes : [],
+      feedback: body.feedback || "",
+      tomorrowReviewItems: Array.isArray(body.tomorrowReviewItems) ? body.tomorrowReviewItems : [],
+      freeNote: body.freeNote || "",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    items.unshift(item);
+    writeLocalCollection(localStoreKeys.studyLogs, items);
+    return localJsonResponse({ item });
+  }
+
+  if (path.startsWith("/api/study-logs/")) {
+    const id = decodeURIComponent(path.split("/").pop());
+    const items = readLocalCollection(localStoreKeys.studyLogs);
+    const index = items.findIndex((item) => item.id === id);
+
+    if (method === "GET") {
+      return localJsonResponse({ item: index === -1 ? null : items[index] });
+    }
+
+    if (method === "DELETE" && index !== -1) {
+      items.splice(index, 1);
+      writeLocalCollection(localStoreKeys.studyLogs, items);
+      return localJsonResponse({ ok: true });
+    }
+  }
+
   if (path === "/api/vocabulary" && method === "GET") {
     const items = readLocalCollection(localStoreKeys.notebookItems);
     return localJsonResponse({ items: filterVocabularyItems(items, parsedUrl.searchParams) });
@@ -859,7 +1979,7 @@ function getLearningItemFilters() {
   return new URLSearchParams(query ? query.slice(1) : "");
 }
 
-const { learningItemsRepository, srsRepository, learningSessionsRepository } = createRepositories({
+const { materialsRepository, learningItemsRepository, srsRepository, learningSessionsRepository, studyLogsRepository } = createRepositories({
   supabase,
   fetchJson,
   getCurrentUser: () => state.currentUser,
@@ -876,6 +1996,34 @@ async function loadLearningItems() {
     setStatus("学習アイテムを読み込みました。");
   } catch (error) {
     setStatus(error.message || "学習アイテムの読み込みに失敗しました。");
+  }
+}
+
+async function loadDictationPractice() {
+  try {
+    const data = await learningItemsRepository.getLearningItems();
+    state.learningItems = data.items || [];
+    renderDictationPractice(elements.dictationPractice, { context: "standalone", reset: true });
+    setStatus("ディクテーション対象を読み込みました。");
+  } catch (error) {
+    if (elements.dictationPractice) {
+      elements.dictationPractice.innerHTML = `<p class="auth-message auth-message--error">${escapeHtml(error.message || "ディクテーション対象の読み込みに失敗しました。")}</p>`;
+    }
+    setStatus(error.message || "ディクテーション対象の読み込みに失敗しました。");
+  }
+}
+
+async function loadRecordingPractice() {
+  try {
+    const data = await learningItemsRepository.getLearningItems();
+    state.learningItems = data.items || [];
+    renderRecordingPractice(elements.recordingPractice, { context: "standalone", reset: true });
+    setStatus("音読録音の対象を読み込みました。");
+  } catch (error) {
+    if (elements.recordingPractice) {
+      elements.recordingPractice.innerHTML = `<p class="auth-message auth-message--error">${escapeHtml(error.message || "音読録音の対象読み込みに失敗しました。")}</p>`;
+    }
+    setStatus(error.message || "音読録音の対象読み込みに失敗しました。");
   }
 }
 
@@ -903,6 +2051,7 @@ function renderLearningItemTable() {
           <td>
             <div class="table-actions">
               <button type="button" class="soft-button learning-item-view" data-id="${item.id}">編集</button>
+              <button type="button" class="soft-button learning-item-speak" data-id="${item.id}">読み上げ</button>
               <button type="button" class="soft-button learning-item-delete" data-id="${item.id}">削除</button>
             </div>
           </td>
@@ -1002,8 +2151,81 @@ function formatTimer(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
 }
 
+function setCoursesMaterialsMessage(message, isError = false) {
+  if (!elements.courseMaterialsMessage) return;
+  elements.courseMaterialsMessage.textContent = message;
+  elements.courseMaterialsMessage.classList.toggle("auth-message--error", isError);
+}
+
+async function fetchVocabulary(language, cefrLevel, domain, limit = 30) {
+  const data = await materialsRepository.getVocabulary({ language, cefrLevel, domain, limit });
+  return data.items || [];
+}
+
+async function fetchReadingMaterials(language, cefrLevel, domain, limit = 5) {
+  const data = await materialsRepository.getReadingMaterials({ language, cefrLevel, domain, limit });
+  return data.items || [];
+}
+
+async function loadCourseDomains() {
+  try {
+    const data = await materialsRepository.getDomains();
+    const domains = data.domains || [];
+    if (!elements.courseFilterDomain || !domains.length) return;
+    const current = elements.courseFilterDomain.value;
+    elements.courseFilterDomain.innerHTML =
+      `<option value="">すべて</option>` +
+      domains
+        .map((d) => `<option value="${escapeHtml(String(d.id))}">${escapeHtml(d.name_ja || String(d.id))}</option>`)
+        .join("");
+    if (domains.some((d) => String(d.id) === current)) {
+      elements.courseFilterDomain.value = current;
+    }
+  } catch {
+    // 取得失敗時はデフォルトの「すべて」のみ表示のまま継続
+  }
+}
+
+async function loadCourseMaterials() {
+  const language = elements.courseFilterLanguage?.value || "english";
+  const cefrLevel = elements.courseFilterCefr?.value || "A1";
+  const domain = elements.courseFilterDomain?.value || "";
+  state.courseFilters = { language, cefrLevel, domain, duration: elements.courseFilterDuration?.value || "" };
+
+  setCoursesMaterialsMessage("教材を読み込んでいます...");
+
+  try {
+    const [vocabulary, reading] = await Promise.all([
+      fetchVocabulary(language, cefrLevel, domain, 30),
+      fetchReadingMaterials(language, cefrLevel, domain)
+    ]);
+    state.dbVocabulary = vocabulary;
+    state.dbReadingMaterials = reading;
+
+    const total = vocabulary.length + reading.length;
+    if (total === 0) {
+      setCoursesMaterialsMessage("DBに該当する教材が見つかりませんでした。既存の学習アイテムで進めます。");
+    } else {
+      setCoursesMaterialsMessage(`語彙 ${vocabulary.length}件・文章 ${reading.length}件 の教材を読み込みました。`);
+    }
+  } catch (error) {
+    state.dbVocabulary = [];
+    state.dbReadingMaterials = [];
+    setCoursesMaterialsMessage(
+      `教材の読み込みに失敗しました。既存の学習アイテムで進めます。（${error.message}）`,
+      true
+    );
+  }
+
+  renderCoursePresetList();
+}
+
 function renderCoursePresetList() {
-  elements.coursePresetList.innerHTML = coursePresets
+  const duration = state.courseFilters.duration;
+  const visiblePresets = duration
+    ? coursePresets.filter((c) => String(c.totalMinutes) === duration)
+    : coursePresets;
+  elements.coursePresetList.innerHTML = visiblePresets
     .map(
       (course) => `
         <button type="button" class="home-card course-preset-button" data-course-id="${course.id}">
@@ -1137,12 +2359,6 @@ function markCourseStepDone(collectionName) {
 function completeCurrentCourseStep() {
   markCourseStepDone("completedSteps");
   const step = currentCourseStep();
-  if (step?.type === "dictation") {
-    state.courseRun.dictationCount += 1;
-  }
-  if (step?.type === "recording") {
-    state.courseRun.recordingCount += 1;
-  }
   syncCourseTextInputs();
 }
 
@@ -1290,55 +2506,131 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "dictation") {
-    elements.courseStepUi.innerHTML = `
-      <div class="course-step-ui-grid">
-        <p>聞き取った内容を書き取ります。音声再生は今後接続します。</p>
-        <textarea rows="5" placeholder="聞き取った内容を入力"></textarea>
-      </div>
-    `;
     run.renderedStepIndex = run.currentStepIndex;
+    renderDictationPractice(elements.courseStepUi, { context: "course", reset: true });
     return;
   }
 
   if (step.type === "recording") {
-    const candidates = state.learningItems
-      .filter((item) => ["sentence", "listening", "grammar", "vocabulary"].includes(item.type))
-      .slice(0, 5);
-    elements.courseStepUi.innerHTML = `
-      <div class="course-step-ui-grid">
-        <p class="muted">本文や例文を声に出して読みます。</p>
-        ${candidates.length
-          ? candidates.map((item) => renderCourseItemCard(item)).join("")
-          : "<p>登録済みの学習アイテムがありません。単語帳にアイテムを追加してください。</p>"}
-      </div>
-    `;
     run.renderedStepIndex = run.currentStepIndex;
+    renderRecordingPractice(elements.courseStepUi, { context: "course", reset: true });
     return;
   }
 
-  if (step.type === "listening" || step.type === "shadowing") {
-    const candidates = state.learningItems
+  if (step.type === "shadowing") {
+    run.renderedStepIndex = run.currentStepIndex;
+    renderRecordingPractice(elements.courseStepUi, { context: "course", reset: true });
+    return;
+  }
+
+  if (step.type === "listening") {
+    const dbItems = state.dbReadingMaterials.slice(0, 1);
+    const localItems = state.learningItems
       .filter((item) => ["listening", "sentence"].includes(item.type))
       .slice(0, 5);
+    const hasDb = dbItems.length > 0;
+
+    const dbSection = hasDb
+      ? `<section class="section-card"><h4>DB教材（リスニング）</h4>${dbItems
+          .map(
+            (m) => `
+            <div class="tts-item-card">
+              <div>
+                <strong>${escapeHtml(m.title || "")}</strong>
+                <p class="muted">${escapeHtml(m.content || m.body || "")}</p>
+              </div>
+              <div class="mini-actions">
+                <button type="button" class="soft-button tts-db-item"
+                  data-text="${escapeHtml(m.content || m.body || m.title || "")}"
+                  data-lang="${escapeHtml(state.courseFilters.language)}">再生</button>
+              </div>
+            </div>`
+          )
+          .join("")}</section>`
+      : "";
+
+    const localSection = localItems.length
+      ? `<div class="tts-item-list">${localItems
+          .map(
+            (item) => `
+              <div class="tts-item-card">
+                <div>
+                  <strong>${escapeHtml(item.title || "")}</strong>
+                  <p class="muted">${escapeHtml(item.content || item.example || item.meaning || "")}</p>
+                </div>
+                <div class="mini-actions">
+                  <button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="1">再生</button>
+                </div>
+              </div>`
+          )
+          .join("")}</div>`
+      : (!hasDb ? "<p>listeningまたはsentenceタイプのLearningItemがまだありません。自由入力欄で読み上げを試せます。</p>" : "");
+
     elements.courseStepUi.innerHTML = `
       <div class="course-step-ui-grid">
-        <p class="muted">${step.type === "shadowing" ? "以下の文を聞きながら同時に声に出すシャドーイング練習です。" : "以下の文を使ってリスニング練習をしましょう。"}</p>
-        ${candidates.length
-          ? candidates.map((item) => renderCourseItemCard(item)).join("")
-          : "<p>listening・sentence タイプの学習アイテムがありません。単語帳に追加してください。</p>"}
+        ${dbSection}
+        ${localSection}
+        <label>
+          自由入力テキスト
+          <textarea id="course-tts-text" rows="5" placeholder="読み上げたい文章を入力"></textarea>
+        </label>
+        <div class="mini-actions">
+          <button type="button" id="course-tts-play" class="soft-button">再生</button>
+        </div>
       </div>
     `;
     run.renderedStepIndex = run.currentStepIndex;
+    elements.courseStepUi.querySelectorAll(".tts-db-item").forEach((button) => {
+      button.addEventListener("click", () => {
+        const text = button.dataset.text;
+        const lang = languageToSpeechLang(button.dataset.lang);
+        setTtsText(text, button.dataset.lang);
+        speakText(text, { language: lang });
+      });
+    });
+    elements.courseStepUi.querySelectorAll(".tts-course-item").forEach((button) => {
+      button.addEventListener("click", () => {
+        const item = state.learningItems.find((entry) => entry.id === button.dataset.id);
+        if (item) speakLearningItem(item, { rate: Number(button.dataset.rate || 1) });
+      });
+    });
+    document.querySelector("#course-tts-play")?.addEventListener("click", () => {
+      const text = document.querySelector("#course-tts-text").value;
+      setTtsText(text, elements.ttsLanguage.value);
+      speakText(text);
+    });
     return;
   }
 
   if (step.type === "reading" || step.type === "grammar") {
-    const candidates = state.learningItems
+    const dbItems = state.dbReadingMaterials.slice(0, 3);
+    const localItems = state.learningItems
       .filter((item) => ["grammar", "sentence", "listening"].includes(item.type))
-      .slice(0, 5);
-    elements.courseStepUi.innerHTML = candidates.length
-      ? `<div class="course-step-ui-grid">${candidates.map((item) => renderCourseItemCard(item)).join("")}</div>`
-      : "<p>grammar・sentence・listening タイプの学習アイテムがありません。単語帳に追加してください。</p>";
+      .slice(0, 3);
+
+    const dbSection = dbItems.length
+      ? `<section class="section-card"><h4>DB教材</h4>${dbItems
+          .map(
+            (m) => `
+            <div>
+              <strong>${escapeHtml(m.title || "")}</strong>
+              ${m.cefr_level ? `<span class="eyebrow"> ${escapeHtml(m.cefr_level)}</span>` : ""}
+              <p class="muted">${escapeHtml(m.content || m.body || "")}</p>
+            </div>`
+          )
+          .join("")}</section>`
+      : "";
+
+    const localSection = localItems.length
+      ? `<div class="course-step-ui-grid">${localItems
+          .map((item) => renderCourseItemCard(item))
+          .join("")}</div>`
+      : "";
+
+    elements.courseStepUi.innerHTML =
+      dbSection || localSection
+        ? dbSection + localSection
+        : "<p>登録済みのLearningItemから文法・例文・リスニング項目を確認してください。</p>";
     run.renderedStepIndex = run.currentStepIndex;
     return;
   }
@@ -1399,6 +2691,8 @@ function renderCourseSummary() {
       <div class="course-summary-item"><span>完了ステップ</span><strong>${escapeHtml(String(payload.completedSteps.length))}</strong></div>
       <div class="course-summary-item"><span>復習項目</span><strong>${escapeHtml(String(payload.reviewedItemIds.length))}</strong></div>
       <div class="course-summary-item"><span>難しい/忘れた</span><strong>${escapeHtml(String(payload.mistakeItemIds.length))}</strong></div>
+      <div class="course-summary-item"><span>ディクテーション</span><strong>${escapeHtml(String(payload.dictationCount))}</strong></div>
+      <div class="course-summary-item"><span>録音回数</span><strong>${escapeHtml(String(payload.recordingCount))}</strong></div>
     </div>
     <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
     <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>
@@ -1569,37 +2863,105 @@ async function deleteNotebookItem(id) {
 
 async function loadHistory() {
   try {
-    const data = await fetchJson("/api/history");
-    state.historyItems = data.items || [];
-    renderHistoryTable();
+    const [sessionsData, logsData] = await Promise.all([
+      learningSessionsRepository.getLearningSessions(),
+      studyLogsRepository.getStudyLogs()
+    ]);
+    state.learningSessions = sortHistoryByDate(sessionsData.items || []);
+    state.studyLogs = sortHistoryByDate(logsData.items || []);
+    renderHistorySummary();
+    renderSessionHistoryTable();
+    renderStudyLogTable();
     setStatus("学習履歴を読み込みました。");
   } catch (error) {
     setStatus(error.message || "履歴の読み込みに失敗しました。");
   }
 }
 
-function renderHistoryTable() {
-  if (state.historyItems.length === 0) {
-    elements.historyTableBody.innerHTML = `
+function sortHistoryByDate(items) {
+  return [...items].sort((a, b) => {
+    const dateA = new Date(a.date || a.createdAt || 0);
+    const dateB = new Date(b.date || b.createdAt || 0);
+    return dateB - dateA;
+  });
+}
+
+function historyDateLabel(value) {
+  return value || "";
+}
+
+function sessionDateSet() {
+  return new Set(
+    state.learningSessions
+      .filter((session) => Number(session.actualMinutes || 0) > 0)
+      .map((session) => session.date)
+      .filter(Boolean)
+  );
+}
+
+function calculateStudyStreak() {
+  const dates = sessionDateSet();
+  let streak = 0;
+  const cursor = new Date(todayDateString());
+
+  while (dates.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
+function renderHistorySummary() {
+  const today = todayDateString();
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const sevenDaysAgoIso = sevenDaysAgo.toISOString().slice(0, 10);
+
+  const todayMinutes = state.learningSessions
+    .filter((session) => session.date === today)
+    .reduce((sum, session) => sum + Number(session.actualMinutes || 0), 0);
+  const weekMinutes = state.learningSessions
+    .filter((session) => session.date >= sevenDaysAgoIso && session.date <= today)
+    .reduce((sum, session) => sum + Number(session.actualMinutes || 0), 0);
+  const latestSession = state.learningSessions[0];
+  const latestLog = state.studyLogs[0];
+
+  elements.historyTodayMinutes.textContent = `${todayMinutes}分`;
+  elements.historyWeekMinutes.textContent = `${weekMinutes}分`;
+  elements.historyStreakDays.textContent = `${calculateStudyStreak()}日`;
+  elements.historyLatestSession.textContent = latestSession ? `${latestSession.courseName || "セッション"} / ${latestSession.actualMinutes || 0}分` : "なし";
+  elements.historyLatestLog.textContent = latestLog ? historyDateLabel(latestLog.date) : "なし";
+}
+
+function renderSessionHistoryTable() {
+  if (state.learningSessions.length === 0) {
+    elements.sessionHistoryTableBody.innerHTML = `
       <tr>
-        <td colspan="5">まだ保存された履歴はありません。</td>
+        <td colspan="11">まだ学習履歴がありません。</td>
       </tr>
     `;
     return;
   }
 
-  elements.historyTableBody.innerHTML = state.historyItems
+  elements.sessionHistoryTableBody.innerHTML = state.learningSessions
     .map(
-      (item) => `
+      (session) => `
         <tr>
-          <td>${escapeHtml(formatDate(item.createdAt))}</td>
-          <td>${escapeHtml(languageLabel(item.language))}</td>
-          <td>${escapeHtml(modeLabel(item.mode))}</td>
-          <td>${escapeHtml(item.title || "")}</td>
+          <td>${escapeHtml(historyDateLabel(session.date))}</td>
+          <td>${escapeHtml(session.courseName || "")}</td>
+          <td>${escapeHtml(String(session.plannedMinutes || 0))}分</td>
+          <td>${escapeHtml(String(session.actualMinutes || 0))}分</td>
+          <td>${escapeHtml(String(session.completedSteps?.length || 0))}</td>
+          <td>${escapeHtml(String(session.skippedSteps?.length || 0))}</td>
+          <td>${escapeHtml(String(session.reviewedItemIds?.length || 0))}</td>
+          <td>${escapeHtml(String(session.mistakeItemIds?.length || 0))}</td>
+          <td>${session.writingText ? "あり" : "なし"}</td>
+          <td>${session.note ? "あり" : "なし"}</td>
           <td>
             <div class="table-actions">
-              <button type="button" class="soft-button history-view" data-id="${item.id}">詳細表示</button>
-              <button type="button" class="soft-button history-delete" data-id="${item.id}">削除</button>
+              <button type="button" class="soft-button session-view" data-id="${session.id}">詳細</button>
+              <button type="button" class="soft-button session-delete" data-id="${session.id}">削除</button>
             </div>
           </td>
         </tr>
@@ -1608,19 +2970,147 @@ function renderHistoryTable() {
     .join("");
 }
 
-function renderHistoryDetail(item) {
+function renderStudyLogTable() {
+  if (state.studyLogs.length === 0) {
+    elements.studyLogTableBody.innerHTML = `
+      <tr>
+        <td colspan="6">まだ学習ログがありません。</td>
+      </tr>
+    `;
+    return;
+  }
+
+  elements.studyLogTableBody.innerHTML = state.studyLogs
+    .map(
+      (log) => `
+        <tr>
+          <td>${escapeHtml(historyDateLabel(log.date))}</td>
+          <td>${escapeHtml(String(log.learnedItems?.length || 0))}</td>
+          <td>${escapeHtml(String(log.mistakes?.length || 0))}</td>
+          <td>${log.feedback ? "あり" : "なし"}</td>
+          <td>${log.freeNote ? "あり" : "なし"}</td>
+          <td>
+            <div class="table-actions">
+              <button type="button" class="soft-button study-log-view" data-id="${log.id}">詳細</button>
+              <button type="button" class="soft-button study-log-delete" data-id="${log.id}">削除</button>
+            </div>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function renderItemList(items, fallbackIds = []) {
+  if (items.length === 0 && fallbackIds.length === 0) {
+    return "<p>なし</p>";
+  }
+
+  if (items.length === 0) {
+    return `<ul class="detail-list">${fallbackIds.map((id) => `<li>${escapeHtml(id)}</li>`).join("")}</ul>`;
+  }
+
+  return `
+    <div class="item-chip-list">
+      ${items
+        .map(
+          (item) => `
+            <div class="item-chip">
+              <strong>${escapeHtml(item.title || item.id)}</strong>
+              <span>${escapeHtml(learningItemTypeLabel(item.type))} / ${escapeHtml(languageLabel(item.language))}</span>
+              ${item.meaning ? `<p>${escapeHtml(item.meaning)}</p>` : ""}
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function loadLearningItemsByIds(ids) {
+  const uniqueIds = uniqueValues(ids);
+  if (!uniqueIds.length) {
+    return [];
+  }
+
+  try {
+    const data = await learningItemsRepository.getLearningItemsByIds(uniqueIds);
+    return data.items || [];
+  } catch (error) {
+    setStatus(error.message || "学習アイテムの取得に失敗しました。");
+    return [];
+  }
+}
+
+async function renderSessionDetail(session) {
+  const reviewedItems = await loadLearningItemsByIds(session.reviewedItemIds || []);
+  const mistakeItems = await loadLearningItemsByIds(session.mistakeItemIds || []);
+
   elements.historyDetail.className = "result-area";
   elements.historyDetail.innerHTML = `
     <div class="rendered-result">
-      <h3>${escapeHtml(item.title || "学習履歴")}</h3>
-      <div class="summary-box">${escapeHtml(languageLabel(item.language))} / ${escapeHtml(modeLabel(item.mode))} / ${escapeHtml(formatDate(item.createdAt))}</div>
+      <h3>${escapeHtml(session.courseName || "LearningSession")}</h3>
+      <div class="summary-box">${escapeHtml(historyDateLabel(session.date))} / 予定 ${escapeHtml(String(session.plannedMinutes || 0))}分 / 実績 ${escapeHtml(String(session.actualMinutes || 0))}分</div>
       <article class="section-card">
-        <h4>入力文</h4>
-        <p>${escapeHtml(item.inputText || "")}</p>
+        <h4>完了したステップ</h4>
+        <p>${escapeHtml((session.completedSteps || []).join(", ") || "なし")}</p>
       </article>
       <article class="section-card">
-        <h4>保存メモ</h4>
-        <p>${escapeHtml(item.memo || "メモなし")}</p>
+        <h4>スキップしたステップ</h4>
+        <p>${escapeHtml((session.skippedSteps || []).join(", ") || "なし")}</p>
+      </article>
+      <article class="section-card">
+        <h4>復習した項目</h4>
+        ${renderItemList(reviewedItems, session.reviewedItemIds || [])}
+      </article>
+      <article class="section-card">
+        <h4>難しい / 忘れた項目</h4>
+        ${renderItemList(mistakeItems, session.mistakeItemIds || [])}
+      </article>
+      <article class="section-card">
+        <h4>カウント</h4>
+        <p>dictationCount: ${escapeHtml(String(session.dictationCount || 0))} / recordingCount: ${escapeHtml(String(session.recordingCount || 0))}</p>
+      </article>
+      <article class="section-card">
+        <h4>作文</h4>
+        <p>${escapeHtml(session.writingText || "未入力")}</p>
+      </article>
+      <article class="section-card">
+        <h4>フィードバック</h4>
+        <p>${escapeHtml(session.feedbackText || "なし")}</p>
+      </article>
+      <article class="section-card">
+        <h4>メモ</h4>
+        <p>${escapeHtml(session.note || "未入力")}</p>
+      </article>
+    </div>
+  `;
+}
+
+function renderStudyLogDetail(log) {
+  elements.historyDetail.className = "result-area";
+  elements.historyDetail.innerHTML = `
+    <div class="rendered-result">
+      <h3>StudyLog ${escapeHtml(historyDateLabel(log.date))}</h3>
+      <article class="section-card">
+        <h4>learnedItems</h4>
+        <p>${escapeHtml(JSON.stringify(log.learnedItems || [], null, 2))}</p>
+      </article>
+      <article class="section-card">
+        <h4>mistakes</h4>
+        <p>${escapeHtml(JSON.stringify(log.mistakes || [], null, 2))}</p>
+      </article>
+      <article class="section-card">
+        <h4>feedback</h4>
+        <p>${escapeHtml(log.feedback || "なし")}</p>
+      </article>
+      <article class="section-card">
+        <h4>tomorrowReviewItems</h4>
+        <p>${escapeHtml(JSON.stringify(log.tomorrowReviewItems || [], null, 2))}</p>
+      </article>
+      <article class="section-card">
+        <h4>freeNote</h4>
+        <p>${escapeHtml(log.freeNote || "なし")}</p>
       </article>
     </div>
   `;
@@ -1631,28 +3121,56 @@ function clearHistoryDetail() {
   elements.historyDetail.innerHTML = "<p>履歴を選ぶと詳細が表示されます。</p>";
 }
 
-async function showHistoryDetail(id) {
+async function showSessionDetail(id) {
   try {
-    const data = await fetchJson(`/api/history/${id}`);
-    state.selectedHistoryId = id;
-    renderHistoryDetail(data.item);
+    const data = await learningSessionsRepository.getLearningSessionById(id);
+    state.selectedSessionId = id;
+    state.selectedStudyLogId = "";
+    if (!data.item) {
+      throw new Error("学習セッションが見つかりません。");
+    }
+    await renderSessionDetail(data.item);
   } catch (error) {
-    setStatus(error.message || "履歴詳細の読み込みに失敗しました。");
+    setStatus(error.message || "セッション詳細の読み込みに失敗しました。");
   }
 }
 
-async function deleteHistory(id) {
+async function showStudyLogDetail(id) {
+  try {
+    const data = await studyLogsRepository.getStudyLogById(id);
+    state.selectedStudyLogId = id;
+    state.selectedSessionId = "";
+    if (!data.item) {
+      throw new Error("学習ログが見つかりません。");
+    }
+    renderStudyLogDetail(data.item);
+  } catch (error) {
+    setStatus(error.message || "学習ログ詳細の読み込みに失敗しました。");
+  }
+}
+
+async function deleteSessionHistory(id) {
   await withBusy(async () => {
-    await fetchJson(`/api/history/${id}`, {
-      method: "DELETE"
-    });
-    if (state.selectedHistoryId === id) {
-      state.selectedHistoryId = "";
+    await learningSessionsRepository.deleteLearningSession(id);
+    if (state.selectedSessionId === id) {
+      state.selectedSessionId = "";
       clearHistoryDetail();
     }
     await loadHistory();
-    setStatus("履歴を削除しました。");
-  }, "履歴を削除しています...");
+    setStatus("学習セッションを削除しました。");
+  }, "学習セッションを削除しています...");
+}
+
+async function deleteStudyLogHistory(id) {
+  await withBusy(async () => {
+    await studyLogsRepository.deleteStudyLog(id);
+    if (state.selectedStudyLogId === id) {
+      state.selectedStudyLogId = "";
+      clearHistoryDetail();
+    }
+    await loadHistory();
+    setStatus("学習ログを削除しました。");
+  }, "学習ログを削除しています...");
 }
 
 function currentReviewEntry() {
@@ -1735,8 +3253,16 @@ function renderReviewAnswer(item) {
     .filter(([, value]) => value)
     .map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`)
     .join("");
+  const speechText = learningItemSpeechText(item);
+  const speechButton = speechText
+    ? `
+      <div class="mini-actions tts-inline-actions">
+        <button type="button" class="soft-button tts-review-current">答えを読み上げ</button>
+      </div>
+    `
+    : "";
 
-  elements.reviewAnswerArea.innerHTML = rows ? `<dl>${rows}</dl>` : "<p>表示できる答えがありません。</p>";
+  elements.reviewAnswerArea.innerHTML = `${rows ? `<dl>${rows}</dl>` : "<p>表示できる答えがありません。</p>"}${speechButton}`;
   elements.reviewAnswerArea.classList.toggle("hidden", !state.reviewRevealed);
 }
 
@@ -1864,6 +3390,11 @@ elements.homeButtons.forEach((button) => {
 elements.learningItemSearch.addEventListener("click", loadLearningItems);
 elements.learningItemForm.addEventListener("submit", saveLearningItem);
 elements.newLearningItem.addEventListener("click", resetLearningItemForm);
+elements.speakLearningItem.addEventListener("click", () => {
+  const selectedItem = state.learningItems.find((entry) => entry.id === state.selectedLearningItemId);
+  const draftItem = selectedItem || buildLearningItemPayload();
+  speakLearningItem(draftItem);
+});
 elements.deleteLearningItem.addEventListener("click", async () => {
   const id = elements.learningItemId.value;
   if (!id) {
@@ -1884,6 +3415,13 @@ elements.learningItemTableBody.addEventListener("click", async (event) => {
     }
   }
 
+  if (target.classList.contains("learning-item-speak")) {
+    const item = state.learningItems.find((entry) => entry.id === target.dataset.id);
+    if (item) {
+      speakLearningItem(item);
+    }
+  }
+
   if (target.classList.contains("learning-item-delete")) {
     await deleteLearningItem(target.dataset.id);
   }
@@ -1895,6 +3433,8 @@ elements.coursePresetList.addEventListener("click", (event) => {
     selectCourse(button.dataset.courseId);
   }
 });
+
+elements.courseFilterApply?.addEventListener("click", loadCourseMaterials);
 
 elements.courseConfirmBack.addEventListener("click", resetCourseToSelect);
 elements.courseStart.addEventListener("click", startCourse);
@@ -1961,20 +3501,40 @@ elements.notebookTableBody.addEventListener("click", async (event) => {
 });
 
 elements.refreshHistory.addEventListener("click", loadHistory);
-elements.historyTableBody.addEventListener("click", async (event) => {
+elements.sessionHistoryTableBody.addEventListener("click", async (event) => {
   const target = event.target;
 
-  if (target.classList.contains("history-view")) {
-    await showHistoryDetail(target.dataset.id);
+  if (target.classList.contains("session-view")) {
+    await showSessionDetail(target.dataset.id);
   }
 
-  if (target.classList.contains("history-delete")) {
-    await deleteHistory(target.dataset.id);
+  if (target.classList.contains("session-delete")) {
+    await deleteSessionHistory(target.dataset.id);
+  }
+});
+
+elements.studyLogTableBody.addEventListener("click", async (event) => {
+  const target = event.target;
+
+  if (target.classList.contains("study-log-view")) {
+    await showStudyLogDetail(target.dataset.id);
+  }
+
+  if (target.classList.contains("study-log-delete")) {
+    await deleteStudyLogHistory(target.dataset.id);
   }
 });
 
 elements.loadReviewCard.addEventListener("click", loadReviewItems);
 elements.revealReviewAnswer.addEventListener("click", revealReviewAnswer);
+elements.reviewAnswerArea.addEventListener("click", (event) => {
+  if (event.target.classList.contains("tts-review-current")) {
+    const entry = currentReviewEntry();
+    if (entry) {
+      speakLearningItem(entry.item);
+    }
+  }
+});
 elements.reviewEasy.addEventListener("click", async () => {
   await submitReview("easy");
 });
@@ -1988,7 +3548,16 @@ elements.reviewForgot.addEventListener("click", async () => {
   await submitReview("forgot");
 });
 
+elements.ttsLanguage.addEventListener("change", renderTtsVoiceOptions);
+elements.ttsRate.addEventListener("input", updateTtsSliderLabels);
+elements.ttsPitch.addEventListener("input", updateTtsSliderLabels);
+elements.ttsPlay.addEventListener("click", () => speakText());
+elements.ttsStop.addEventListener("click", stopSpeech);
+elements.ttsPause.addEventListener("click", pauseSpeech);
+elements.ttsResume.addEventListener("click", resumeSpeech);
+
 window.addEventListener("beforeunload", (event) => {
+  stopActiveRecording();
   if (state.courseRun && !state.courseRun.isComplete && !state.courseRun.saved) {
     event.preventDefault();
     event.returnValue = "";
@@ -1999,4 +3568,5 @@ clearHistoryDetail();
 renderReviewCard();
 renderCoursePresetList();
 setStatus("準備完了");
+initTextToSpeech();
 initAuth();
