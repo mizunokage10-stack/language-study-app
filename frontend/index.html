@@ -23,7 +23,6 @@
           <button class="nav-button" data-page="dictation" type="button">ディクテーション</button>
           <button class="nav-button" data-page="recording" type="button">音読録音</button>
           <button class="nav-button" data-page="notebook" type="button">単語帳</button>
-          <button class="nav-button" data-page="review" type="button">復習モード</button>
           <button class="nav-button" data-page="history" type="button">学習履歴</button>
         </nav>
 
@@ -91,10 +90,6 @@
             <button class="home-card" data-go="notebook" type="button">
               <strong>単語帳</strong>
               <span>単語、意味、例文、メモ、習得ステータスを管理</span>
-            </button>
-            <button class="home-card" data-go="review" type="button">
-              <strong>復習モード</strong>
-              <span>今日復習すべき学習アイテムをSRS形式で復習</span>
             </button>
             <button class="home-card" data-go="history" type="button">
               <strong>学習履歴</strong>
@@ -214,7 +209,13 @@
               <p class="eyebrow">Learning Items</p>
               <h2>学習アイテム登録</h2>
             </div>
+            <div class="tab-bar">
+              <button type="button" class="tab-button active" data-tab="my-items">マイアイテム</button>
+              <button type="button" class="tab-button" data-tab="db-materials">DB教材</button>
+            </div>
           </div>
+
+          <div id="tab-my-items">
           <div class="filter-bar card">
             <label>
               種類フィルター
@@ -320,6 +321,34 @@
               </form>
             </section>
           </div>
+          </div><!-- /tab-my-items -->
+
+          <div id="tab-db-materials" style="display:none">
+            <div class="filter-bar card">
+              <label>
+                言語
+                <select id="db-materials-language">
+                  <option value="english">英語</option>
+                  <option value="chinese">中国語</option>
+                </select>
+              </label>
+              <label>
+                CEFRレベル
+                <select id="db-materials-cefr">
+                  <option value="A1">A1</option>
+                  <option value="A2">A2</option>
+                  <option value="B1">B1</option>
+                  <option value="B2">B2</option>
+                  <option value="C1">C1</option>
+                </select>
+              </label>
+              <button type="button" id="db-materials-search" class="soft-button">検索</button>
+            </div>
+            <section class="card">
+              <div id="db-materials-list"><p class="muted">「検索」ボタンでDB教材を読み込みます。</p></div>
+            </section>
+          </div><!-- /tab-db-materials -->
+
         </section>
 
         <section class="page" id="page-notebook">

@@ -821,3 +821,76 @@ button:disabled {
   word-break: break-all;
   margin-bottom: 8px;
 }
+
+/* ---- タブ切り替え ---- */
+.tab-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-button {
+  padding: 8px 18px;
+  border: 1px solid #c8d3df;
+  border-radius: 20px;
+  background: #f0f4f8;
+  color: #526071;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, #3658b0 0%, #1f7a73 100%);
+  color: white;
+  border-color: transparent;
+}
+
+/* ---- DB教材 ---- */
+.db-materials-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.db-material-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #dde6f0;
+  border-radius: 12px;
+  background: #f7f9fc;
+}
+
+/* ---- 単語学習クイズ ---- */
+.vocab-quiz-card {
+  display: grid;
+  gap: 14px;
+  max-width: 560px;
+}
+
+.vocab-quiz-progress {
+  font-size: 0.82rem;
+}
+
+.vocab-quiz-word {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #1e293b;
+  margin: 0;
+}
+
+.vocab-quiz-answer-block {
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.vocab-quiz-correct-answer {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #1d4ed8;
+  margin: 0;
+}
