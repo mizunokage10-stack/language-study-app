@@ -707,13 +707,15 @@ export function createRepositories({
 
   // ---- 教材リポジトリ（RLS読み取り専用 / anon key で OK / ユーザー認証不要） --------
 
+  const dbLangCode = (lang) => ({ english: "en", chinese: "zh" }[lang] ?? lang);
+
   const materialsRepository = {
     async getVocabulary({ language, cefrLevel, domain, limit = 30 }) {
       if (supabase) {
         let query = supabase
           .from("vocabulary_items")
           .select("*")
-          .eq("language", language)
+          .eq("language", dbLangCode(language))
           .eq("cefr_level", cefrLevel)
           .order("id", { ascending: true })
           .limit(limit);
@@ -735,7 +737,7 @@ export function createRepositories({
         let query = supabase
           .from("reading_materials")
           .select("*")
-          .eq("language", language)
+          .eq("language", dbLangCode(language))
           .eq("cefr_level", cefrLevel)
           .order("id", { ascending: true })
           .limit(limit);
