@@ -510,10 +510,15 @@ function renderTtsVoiceOptions() {
 
   const selectedLanguage = elements.ttsLanguage.value;
   const currentVoice = elements.ttsVoice.value;
-  const voices = [...state.ttsVoices].sort((a, b) => {
-    const scoreDiff = voiceLanguageScore(a, selectedLanguage) - voiceLanguageScore(b, selectedLanguage);
-    return scoreDiff || a.name.localeCompare(b.name);
-  });
+  const voices = [...state.ttsVoices]
+    .filter((v) => {
+      const lang = String(v.lang || "").toLowerCase();
+      return lang.startsWith("zh") || lang.startsWith("en");
+    })
+    .sort((a, b) => {
+      const scoreDiff = voiceLanguageScore(a, selectedLanguage) - voiceLanguageScore(b, selectedLanguage);
+      return scoreDiff || a.name.localeCompare(b.name);
+    });
 
   elements.ttsVoice.innerHTML = `
     <option value="">ブラウザの自動選択</option>
