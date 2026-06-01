@@ -1250,6 +1250,18 @@ function renderCourseTimer() {
   }
 }
 
+function renderCourseItemCard(item) {
+  const sub = item.meaning || item.exampleTranslation || item.content || "";
+  const example = item.example || "";
+  return `
+    <div class="course-item-card">
+      <strong>${escapeHtml(item.title)}</strong>
+      ${sub ? `<p class="muted">${escapeHtml(sub)}</p>` : ""}
+      ${example ? `<p class="course-item-example">${escapeHtml(example)}</p>` : ""}
+    </div>
+  `;
+}
+
 function renderCourseStepUi(step) {
   const run = state.courseRun;
   const srsCount = state.reviewQueue.length;
@@ -1289,13 +1301,33 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "recording") {
-    elements.courseStepUi.innerHTML = "<p>本文や例文を声に出して読みます。録音機能は今後MediaRecorderに接続します。</p>";
+    const candidates = state.learningItems
+      .filter((item) => ["sentence", "listening", "grammar", "vocabulary"].includes(item.type))
+      .slice(0, 5);
+    elements.courseStepUi.innerHTML = `
+      <div class="course-step-ui-grid">
+        <p class="muted">本文や例文を声に出して読みます。</p>
+        ${candidates.length
+          ? candidates.map((item) => renderCourseItemCard(item)).join("")
+          : "<p>登録済みの学習アイテムがありません。単語帳にアイテムを追加してください。</p>"}
+      </div>
+    `;
     run.renderedStepIndex = run.currentStepIndex;
     return;
   }
 
   if (step.type === "listening" || step.type === "shadowing") {
-    elements.courseStepUi.innerHTML = "<p>登録済みのlisteningまたはsentenceを聞く練習です。音声再生機能は今後接続します。</p>";
+    const candidates = state.learningItems
+      .filter((item) => ["listening", "sentence"].includes(item.type))
+      .slice(0, 5);
+    elements.courseStepUi.innerHTML = `
+      <div class="course-step-ui-grid">
+        <p class="muted">${step.type === "shadowing" ? "以下の文を聞きながら同時に声に出すシャドーイング練習です。" : "以下の文を使ってリスニング練習をしましょう。"}</p>
+        ${candidates.length
+          ? candidates.map((item) => renderCourseItemCard(item)).join("")
+          : "<p>listening・sentence タイプの学習アイテムがありません。単語帳に追加してください。</p>"}
+      </div>
+    `;
     run.renderedStepIndex = run.currentStepIndex;
     return;
   }
@@ -1303,12 +1335,10 @@ function renderCourseStepUi(step) {
   if (step.type === "reading" || step.type === "grammar") {
     const candidates = state.learningItems
       .filter((item) => ["grammar", "sentence", "listening"].includes(item.type))
-      .slice(0, 3);
+      .slice(0, 5);
     elements.courseStepUi.innerHTML = candidates.length
-      ? `<div class="course-step-ui-grid">${candidates
-          .map((item) => `<div><strong>${escapeHtml(item.title)}</strong><p class="muted">${escapeHtml(item.meaning || item.exampleTranslation || item.content || "")}</p></div>`)
-          .join("")}</div>`
-      : "<p>登録済みのLearningItemから文法・例文・リスニング項目を確認してください。</p>";
+      ? `<div class="course-step-ui-grid">${candidates.map((item) => renderCourseItemCard(item)).join("")}</div>`
+      : "<p>grammar・sentence・listening タイプの学習アイテムがありません。単語帳に追加してください。</p>";
     run.renderedStepIndex = run.currentStepIndex;
     return;
   }
