@@ -308,6 +308,18 @@ export async function getLearningSession(id) {
   return sessions.find((session) => session.id === id) || null;
 }
 
+export async function deleteLearningSession(id) {
+  const sessions = await readLearningSessions();
+  const nextSessions = sessions.filter((session) => session.id !== id);
+
+  if (nextSessions.length === sessions.length) {
+    return false;
+  }
+
+  await writeJsonFile(LEARNING_SESSIONS_FILE, nextSessions);
+  return true;
+}
+
 export async function readStudyLogs() {
   return readJsonFile(STUDY_LOGS_FILE, []);
 }
@@ -337,4 +349,16 @@ export async function saveStudyLog(payload) {
 export async function getStudyLog(id) {
   const logs = await readStudyLogs();
   return logs.find((log) => log.id === id) || null;
+}
+
+export async function deleteStudyLog(id) {
+  const logs = await readStudyLogs();
+  const nextLogs = logs.filter((log) => log.id !== id);
+
+  if (nextLogs.length === logs.length) {
+    return false;
+  }
+
+  await writeJsonFile(STUDY_LOGS_FILE, nextLogs);
+  return true;
 }

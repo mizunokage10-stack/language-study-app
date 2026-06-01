@@ -139,6 +139,12 @@ button[type="submit"],
   gap: 16px;
 }
 
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
 .home-card {
   padding: 22px;
   background: rgba(255, 255, 255, 0.86);
@@ -207,7 +213,8 @@ textarea {
 }
 
 button[type="submit"],
-#review-known {
+#review-easy,
+#review-normal {
   padding: 12px 20px;
   background: linear-gradient(135deg, #235f78 0%, #3658b0 100%);
   color: white;
@@ -318,6 +325,259 @@ button[type="submit"],
   border: 1px solid #c8ddd7;
 }
 
+.course-step-list {
+  display: grid;
+  gap: 10px;
+}
+
+.course-step-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #dde6f0;
+  border-radius: 16px;
+  background: #f7f9fc;
+}
+
+.course-step-row strong {
+  color: #1e293b;
+}
+
+.course-timer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.timer-display {
+  min-width: 150px;
+  text-align: center;
+  font-size: 2.4rem;
+  font-weight: 900;
+  color: #1e293b;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: #eef5f3;
+  border: 1px solid #c8ddd7;
+}
+
+.progress-track {
+  width: 100%;
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(135deg, #235f78 0%, #1f7a73 100%);
+  transition: width 0.2s ease;
+}
+
+.course-step-ui-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.tts-inline-actions {
+  margin-top: 12px;
+}
+
+.tts-item-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tts-item-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  background: #f7f9fc;
+  border: 1px solid #dde6f0;
+  border-radius: 8px;
+}
+
+.tts-item-card p {
+  margin: 4px 0 0;
+}
+
+.tts-item-card .mini-actions {
+  justify-content: flex-end;
+}
+
+.dictation-practice {
+  display: grid;
+  gap: 14px;
+}
+
+.dictation-audio-actions {
+  display: flex;
+  align-items: end;
+}
+
+.dictation-diff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dictation-token {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border-radius: 8px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  font-weight: 700;
+}
+
+.dictation-token--match {
+  background: #e8f7ee;
+  border-color: #b7dfc6;
+  color: #166534;
+}
+
+.dictation-token--missing {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.dictation-token--extra {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #3730a3;
+}
+
+.dictation-token--different {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.dictation-rating-actions {
+  margin-top: 12px;
+}
+
+.recording-practice {
+  display: grid;
+  gap: 14px;
+}
+
+.recording-practice-text {
+  margin: 10px 0 0;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #dde6f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.recording-audio {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.recording-checklist {
+  display: grid;
+  gap: 10px;
+}
+
+.checkbox-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  font-weight: 600;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.recording-rating-actions {
+  margin-top: 12px;
+}
+
+.course-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.history-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.history-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.history-detail-card {
+  min-height: 360px;
+}
+
+.detail-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.item-chip-list {
+  display: grid;
+  gap: 10px;
+}
+
+.item-chip {
+  padding: 12px 14px;
+  border: 1px solid #dde6f0;
+  border-radius: 16px;
+  background: white;
+}
+
+.item-chip strong {
+  display: block;
+  color: #1e293b;
+}
+
+.item-chip span {
+  color: #526071;
+  font-size: 0.92rem;
+}
+
+.course-summary-item {
+  padding: 12px 14px;
+  border: 1px solid #dde6f0;
+  border-radius: 16px;
+  background: #f7f9fc;
+}
+
+.course-summary-item span {
+  display: block;
+  color: #526071;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.course-summary-item strong {
+  display: block;
+  color: #1e293b;
+  font-size: 1.35rem;
+}
+
 .filter-bar {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 220px)) minmax(120px, auto);
@@ -378,6 +638,69 @@ th {
   border-top: 1px solid #d9e2ec;
 }
 
+.review-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 180px)) minmax(180px, auto);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.review-stat {
+  padding: 12px 14px;
+  border: 1px solid #d6dfeb;
+  border-radius: 16px;
+  background: #f7f9fc;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.review-stat span {
+  color: #526071;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.review-stat strong {
+  color: #1e293b;
+  font-size: 1.35rem;
+}
+
+.answer-panel {
+  padding: 16px;
+  border: 1px solid #d9e2ec;
+  border-radius: 18px;
+  background: #f7f9fc;
+}
+
+.answer-panel dl {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.answer-panel dt {
+  color: #526071;
+  font-weight: 800;
+}
+
+.answer-panel dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.review-rating-button {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 18px;
+  font-weight: 700;
+}
+
+.mistake-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
 .hidden {
   display: none;
 }
@@ -405,8 +728,23 @@ button:disabled {
   .two-column,
   .two-column.wide-right,
   .field-row,
-  .filter-bar {
+  .filter-bar,
+  .review-toolbar,
+  .course-step-row,
+  .tts-item-card {
     grid-template-columns: 1fr;
+  }
+
+  .tts-item-card .mini-actions {
+    justify-content: flex-start;
+  }
+
+  .course-timer-head {
+    flex-direction: column;
+  }
+
+  .timer-display {
+    width: 100%;
   }
 }
 

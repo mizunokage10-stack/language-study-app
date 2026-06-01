@@ -18,6 +18,10 @@
         <nav class="side-nav">
           <button class="nav-button active" data-page="home" type="button">ホーム</button>
           <button class="nav-button" data-page="learning-items" type="button">学習アイテム登録</button>
+          <button class="nav-button" data-page="course" type="button">学習タイマー</button>
+          <button class="nav-button" data-page="audio" type="button">音声練習</button>
+          <button class="nav-button" data-page="dictation" type="button">ディクテーション</button>
+          <button class="nav-button" data-page="recording" type="button">音読録音</button>
           <button class="nav-button" data-page="notebook" type="button">単語帳</button>
           <button class="nav-button" data-page="review" type="button">復習モード</button>
           <button class="nav-button" data-page="history" type="button">学習履歴</button>
@@ -68,19 +72,140 @@
               <strong>学習アイテム登録</strong>
               <span>単語、文法、例文、リスニング文、作文ログを一元管理</span>
             </button>
+            <button class="home-card" data-go="course" type="button">
+              <strong>学習タイマー</strong>
+              <span>30分・60分・90分の固定コースで今日の学習を進行</span>
+            </button>
+            <button class="home-card" data-go="audio" type="button">
+              <strong>音声練習</strong>
+              <span>文章を読み上げてリスニング・シャドーイングの土台にする</span>
+            </button>
+            <button class="home-card" data-go="dictation" type="button">
+              <strong>ディクテーション</strong>
+              <span>音声を聞いて入力し、正解文との差分を確認</span>
+            </button>
+            <button class="home-card" data-go="recording" type="button">
+              <strong>音読録音</strong>
+              <span>お手本音声と自分の音読を聞き比べて自己評価</span>
+            </button>
             <button class="home-card" data-go="notebook" type="button">
               <strong>単語帳</strong>
               <span>単語、意味、例文、メモ、習得ステータスを管理</span>
             </button>
             <button class="home-card" data-go="review" type="button">
               <strong>復習モード</strong>
-              <span>登録した単語をフラッシュカード形式で復習</span>
+              <span>今日復習すべき学習アイテムをSRS形式で復習</span>
             </button>
             <button class="home-card" data-go="history" type="button">
               <strong>学習履歴</strong>
               <span>保存済みの学習記録を確認</span>
             </button>
           </div>
+        </section>
+
+        <section class="page" id="page-course">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Course Timer</p>
+              <h2>学習タイマー</h2>
+            </div>
+          </div>
+
+          <section id="course-select-view" class="stack">
+            <section class="card stack" id="course-material-filter">
+              <h3>教材設定</h3>
+              <div class="filter-bar">
+                <label>
+                  言語
+                  <select id="course-filter-language">
+                    <option value="english">英語</option>
+                    <option value="chinese">中国語</option>
+                  </select>
+                </label>
+                <label>
+                  CEFRレベル
+                  <select id="course-filter-cefr">
+                    <option value="A1">A1</option>
+                    <option value="A2">A2</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="C1">C1</option>
+                  </select>
+                </label>
+                <label>
+                  領域
+                  <select id="course-filter-domain">
+                    <option value="">すべて</option>
+                  </select>
+                </label>
+                <label>
+                  学習時間
+                  <select id="course-filter-duration">
+                    <option value="">すべて</option>
+                    <option value="30">30分</option>
+                    <option value="60">60分</option>
+                    <option value="90">90分</option>
+                    <option value="120">120分</option>
+                  </select>
+                </label>
+              </div>
+              <div id="course-materials-message" class="auth-message"></div>
+              <button type="button" id="course-filter-apply">教材を読み込む</button>
+            </section>
+            <div class="course-grid" id="course-preset-list"></div>
+          </section>
+
+          <section id="course-confirm-view" class="card stack hidden">
+            <div>
+              <p class="eyebrow">Course Plan</p>
+              <h3 id="course-confirm-title"></h3>
+              <p id="course-confirm-description" class="muted"></p>
+            </div>
+            <div id="course-confirm-steps" class="course-step-list"></div>
+            <div class="mini-actions">
+              <button type="button" id="course-start">開始</button>
+              <button type="button" id="course-confirm-back" class="soft-button">戻る</button>
+            </div>
+          </section>
+
+          <section id="course-timer-view" class="card stack hidden">
+            <div class="course-timer-head">
+              <div>
+                <p class="eyebrow" id="course-active-name"></p>
+                <h3 id="course-step-title"></h3>
+                <p id="course-step-meta" class="muted"></p>
+              </div>
+              <div class="timer-display" id="course-timer-display">00:00</div>
+            </div>
+            <div class="progress-track">
+              <div id="course-progress-bar" class="progress-bar"></div>
+            </div>
+            <p id="course-step-instructions"></p>
+            <p id="course-next-step" class="muted"></p>
+            <div id="course-step-ui" class="section-card"></div>
+            <div class="mini-actions">
+              <button type="button" id="course-pause" class="soft-button">一時停止</button>
+              <button type="button" id="course-resume" class="soft-button">再開</button>
+              <button type="button" id="course-prev" class="soft-button">戻る</button>
+              <button type="button" id="course-next">次へ</button>
+              <button type="button" id="course-extend" class="soft-button">延長+3分</button>
+              <button type="button" id="course-skip" class="soft-button">スキップ</button>
+              <button type="button" id="course-end" class="soft-button">終了</button>
+            </div>
+          </section>
+
+          <section id="course-complete-view" class="card stack hidden">
+            <div>
+              <p class="eyebrow">Course Complete</p>
+              <h3>コース終了</h3>
+            </div>
+            <div id="course-summary" class="rendered-result"></div>
+            <div id="course-save-message" class="auth-message"></div>
+            <div class="mini-actions">
+              <button type="button" id="course-save">保存</button>
+              <button type="button" id="course-home" class="soft-button">ホームに戻る</button>
+            </div>
+          </section>
         </section>
 
         <section class="page" id="page-learning-items">
@@ -189,6 +314,7 @@
                 <div class="mini-actions">
                   <button type="submit">登録</button>
                   <button type="button" id="new-learning-item" class="soft-button">新規入力</button>
+                  <button type="button" id="speak-learning-item" class="soft-button">読み上げ</button>
                   <button type="button" id="delete-learning-item" class="soft-button">削除</button>
                 </div>
               </form>
@@ -307,34 +433,114 @@
           </div>
         </section>
 
-        <section class="page" id="page-review">
+        <section class="page" id="page-audio">
           <div class="page-header">
             <div>
-              <p class="eyebrow">Review</p>
-              <h2>復習画面</h2>
+              <p class="eyebrow">Text To Speech</p>
+              <h2>音声練習</h2>
             </div>
           </div>
           <section class="card stack">
+            <div id="tts-support-message" class="auth-message"></div>
+            <label>
+              読み上げテキスト
+              <textarea id="tts-text" rows="8" placeholder="読み上げたい文章を入力、またはLearningItemから読み上げを選んでください"></textarea>
+            </label>
             <div class="field-row">
               <label>
-                言語フィルター
-                <select id="review-language">
-                  <option value="">すべて</option>
-                  <option value="english">英語</option>
-                  <option value="chinese">中国語</option>
+                言語
+                <select id="tts-language">
+                  <option value="">Other / Browser Default</option>
+                  <option value="en-US">English</option>
+                  <option value="zh-CN">Chinese</option>
+                  <option value="ja-JP">Japanese</option>
                 </select>
               </label>
-              <button type="button" id="load-review-card" class="soft-button">ランダム出題</button>
+              <label>
+                音声
+                <select id="tts-voice"></select>
+              </label>
             </div>
-            <div id="review-card" class="flashcard empty-state">
-              <p>ここに復習対象の単語が表示されます。</p>
+            <div class="field-row">
+              <label>
+                速度
+                <input id="tts-rate" type="range" min="0.5" max="1.5" step="0.05" value="1" />
+                <span id="tts-rate-value" class="muted">1.00</span>
+              </label>
+              <label>
+                ピッチ
+                <input id="tts-pitch" type="range" min="0.5" max="1.5" step="0.05" value="1" />
+                <span id="tts-pitch-value" class="muted">1.00</span>
+              </label>
             </div>
             <div class="mini-actions">
-              <button type="button" id="reveal-review-answer" class="soft-button">答えを表示</button>
-              <button type="button" id="review-known">覚えた</button>
-              <button type="button" id="review-unsure" class="soft-button">まだ不安</button>
-              <button type="button" id="review-next" class="soft-button">次の単語</button>
+              <button type="button" id="tts-play">再生</button>
+              <button type="button" id="tts-stop" class="soft-button">停止</button>
+              <button type="button" id="tts-pause" class="soft-button">一時停止</button>
+              <button type="button" id="tts-resume" class="soft-button">再開</button>
             </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-dictation">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Dictation</p>
+              <h2>ディクテーション練習</h2>
+            </div>
+          </div>
+          <section class="card stack">
+            <div id="dictation-practice"></div>
+          </section>
+        </section>
+
+        <section class="page" id="page-recording">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">Recording</p>
+              <h2>音読録音</h2>
+            </div>
+          </div>
+          <section class="card stack">
+            <div id="recording-practice"></div>
+          </section>
+        </section>
+
+        <section class="page" id="page-review">
+          <div class="page-header">
+            <div>
+              <p class="eyebrow">SRS Review</p>
+              <h2>今日のSRS復習</h2>
+            </div>
+          </div>
+          <section class="card stack">
+            <div class="review-toolbar">
+              <div class="review-stat">
+                <span>今日の復習対象</span>
+                <strong id="review-total-count">0</strong>
+              </div>
+              <div class="review-stat">
+                <span>現在の問題</span>
+                <strong id="review-current-count">0 / 0</strong>
+              </div>
+              <button type="button" id="load-review-card" class="soft-button">今日の復習を読み込む</button>
+            </div>
+            <div id="review-card" class="flashcard empty-state">
+              <p>今日の復習対象を読み込んでください。</p>
+            </div>
+            <label id="review-answer-field" class="hidden">
+              <span id="review-input-label">答えを入力してください</span>
+              <textarea id="review-answer-input" rows="5"></textarea>
+            </label>
+            <div id="review-answer-area" class="answer-panel hidden"></div>
+            <div class="mini-actions">
+              <button type="button" id="reveal-review-answer" class="soft-button">答えを表示</button>
+              <button type="button" id="review-easy" class="review-rating-button">簡単</button>
+              <button type="button" id="review-normal" class="review-rating-button">普通</button>
+              <button type="button" id="review-hard" class="review-rating-button soft-button">難しい</button>
+              <button type="button" id="review-forgot" class="review-rating-button soft-button">忘れた</button>
+            </div>
+            <div id="review-complete" class="section-card hidden"></div>
           </section>
         </section>
 
@@ -342,28 +548,83 @@
           <div class="page-header">
             <div>
               <p class="eyebrow">History</p>
-              <h2>学習履歴画面</h2>
+              <h2>学習履歴</h2>
             </div>
             <button type="button" id="refresh-history" class="soft-button">再読み込み</button>
           </div>
-          <div class="two-column wide-right">
-            <section class="card">
+
+          <section class="history-summary-grid">
+            <article class="course-summary-item">
+              <span>今日の学習時間</span>
+              <strong id="history-today-minutes">0分</strong>
+            </article>
+            <article class="course-summary-item">
+              <span>最近7日間</span>
+              <strong id="history-week-minutes">0分</strong>
+            </article>
+            <article class="course-summary-item">
+              <span>連続学習日数</span>
+              <strong id="history-streak-days">0日</strong>
+            </article>
+            <article class="course-summary-item">
+              <span>最新セッション</span>
+              <strong id="history-latest-session">なし</strong>
+            </article>
+            <article class="course-summary-item">
+              <span>最新ログ</span>
+              <strong id="history-latest-log">なし</strong>
+            </article>
+          </section>
+
+          <div class="history-layout">
+            <section class="card stack">
+              <div class="option-head">
+                <h3>LearningSession履歴</h3>
+              </div>
               <div class="table-wrap">
                 <table>
                   <thead>
                     <tr>
                       <th>日付</th>
-                      <th>言語</th>
-                      <th>モード</th>
-                      <th>タイトル</th>
+                      <th>コース</th>
+                      <th>予定</th>
+                      <th>実績</th>
+                      <th>完了</th>
+                      <th>スキップ</th>
+                      <th>復習</th>
+                      <th>難しい</th>
+                      <th>作文</th>
+                      <th>メモ</th>
                       <th>操作</th>
                     </tr>
                   </thead>
-                  <tbody id="history-table-body"></tbody>
+                  <tbody id="session-history-table-body"></tbody>
                 </table>
               </div>
             </section>
-            <section class="card">
+
+            <section class="card stack">
+              <div class="option-head">
+                <h3>StudyLog履歴</h3>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>日付</th>
+                      <th>学習項目</th>
+                      <th>ミス</th>
+                      <th>フィードバック</th>
+                      <th>メモ</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="study-log-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="card history-detail-card">
               <h3>詳細表示</h3>
               <div id="history-detail" class="result-area empty-state">
                 <p>履歴を選ぶと詳細が表示されます。</p>
