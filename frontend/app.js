@@ -62,11 +62,19 @@ const elements = {
   learningItemLanguage: document.querySelector("#learning-item-language"),
   learningItemTitle: document.querySelector("#learning-item-title"),
   learningItemMeaning: document.querySelector("#learning-item-meaning"),
+  learningItemPos: document.querySelector("#learning-item-pos"),
   learningItemContent: document.querySelector("#learning-item-content"),
   learningItemExample: document.querySelector("#learning-item-example"),
   learningItemExampleTranslation: document.querySelector("#learning-item-example-translation"),
   learningItemNote: document.querySelector("#learning-item-note"),
   learningItemTags: document.querySelector("#learning-item-tags"),
+  learningItemTitleReading: document.querySelector("#learning-item-title-reading"),
+  learningItemTagsReading: document.querySelector("#learning-item-tags-reading"),
+  vocabFields: document.querySelector("#vocab-fields"),
+  readingFields: document.querySelector("#reading-fields"),
+  vocabBulkPaste: document.querySelector("#vocab-bulk-paste"),
+  copyVocabPrompt: document.querySelector("#copy-vocab-prompt"),
+  vocabBulkImport: document.querySelector("#vocab-bulk-import"),
   newLearningItem: document.querySelector("#new-learning-item"),
   speakLearningItem: document.querySelector("#speak-learning-item"),
   deleteLearningItem: document.querySelector("#delete-learning-item"),
@@ -2081,18 +2089,36 @@ function renderLearningItemTable() {
     .join("");
 }
 
+function updateLearningItemFormVisibility() {
+  const type = elements.learningItemType.value;
+  if (type === "reading") {
+    elements.vocabFields.style.display = "none";
+    elements.readingFields.style.display = "";
+  } else {
+    elements.vocabFields.style.display = "";
+    elements.readingFields.style.display = "none";
+  }
+}
+
 function fillLearningItemForm(item) {
   state.selectedLearningItemId = item.id;
   elements.learningItemId.value = item.id;
-  elements.learningItemType.value = item.type || "vocabulary";
+  const type = item.type === "reading" ? "reading" : "vocabulary";
+  elements.learningItemType.value = type;
   elements.learningItemLanguage.value = item.language || "english";
-  elements.learningItemTitle.value = item.title || "";
-  elements.learningItemMeaning.value = item.meaning || "";
-  elements.learningItemContent.value = item.content || "";
-  elements.learningItemExample.value = item.example || "";
-  elements.learningItemExampleTranslation.value = item.exampleTranslation || "";
-  elements.learningItemNote.value = item.note || "";
-  elements.learningItemTags.value = formatTags(item.tags);
+  updateLearningItemFormVisibility();
+  if (type === "reading") {
+    elements.learningItemTitleReading.value = item.title || "";
+    elements.learningItemContent.value = item.content || "";
+    elements.learningItemTagsReading.value = formatTags(item.tags);
+  } else {
+    elements.learningItemTitle.value = item.title || "";
+    elements.learningItemMeaning.value = item.meaning || "";
+    elements.learningItemPos.value = item.pos || "";
+    elements.learningItemExample.value = item.example || "";
+    elements.learningItemExampleTranslation.value = item.exampleTranslation || "";
+    elements.learningItemTags.value = formatTags(item.tags);
+  }
 }
 
 function resetLearningItemForm() {
@@ -2101,19 +2127,29 @@ function resetLearningItemForm() {
   elements.learningItemId.value = "";
   elements.learningItemType.value = "vocabulary";
   elements.learningItemLanguage.value = "english";
+  updateLearningItemFormVisibility();
   elements.learningItemTitle.focus();
 }
 
 function buildLearningItemPayload() {
+  const type = elements.learningItemType.value;
+  if (type === "reading") {
+    return {
+      type: "reading",
+      language: elements.learningItemLanguage.value,
+      title: elements.learningItemTitleReading.value.trim(),
+      content: elements.learningItemContent.value.trim(),
+      tags: parseTags(elements.learningItemTagsReading.value)
+    };
+  }
   return {
-    type: elements.learningItemType.value,
+    type: "vocabulary",
     language: elements.learningItemLanguage.value,
     title: elements.learningItemTitle.value.trim(),
     meaning: elements.learningItemMeaning.value.trim(),
-    content: elements.learningItemContent.value.trim(),
+    pos: elements.learningItemPos.value.trim(),
     example: elements.learningItemExample.value.trim(),
     exampleTranslation: elements.learningItemExampleTranslation.value.trim(),
-    note: elements.learningItemNote.value.trim(),
     tags: parseTags(elements.learningItemTags.value)
   };
 }
@@ -3659,6 +3695,141 @@ const origLoadHistory = typeof loadHistory === "function" ? loadHistory : null;
 document.addEventListener("historyLoaded", updateHomeStreak);
 
 elements.learningItemSearch.addEventListener("click", loadLearningItems);
+elements.learningItemType.addEventListener("change", updateLearningItemFormVisibility);
+updateLearningItemFormVisibility();
+
+elements.copyVocabPrompt.addEventListener("click", () => {
+  const prompt = `あなたは言語学習教材を作成する専門家です。
+
+これから私が、覚えたい単語・表現を複数並べます。
+それぞれについて、言語学習アプリに登録しやすいように、必ず指定された形式で出力してください。
+
+# 目的
+
+単語を単体で覚えるのではなく、以下の情報をセットにして学習できる教材を作ることが目的です。
+
+- 単語・表現
+- 日本語訳
+- 品詞
+- 自然な例文
+- 例文の日本語訳
+- コロケーション
+- 補足説明
+- 使われる場面
+- CEFR目安
+- 領域
+
+# 出力ルール
+
+以下の形式で、1単語につき1行で出力してください。
+
+単語 / 日本語訳 / 品詞 / 例文 / 例文の日本語訳 / コロケーション / 補足 / 使われる場面 / CEFR目安 / 領域
+
+# 重要な形式ルール
+
+- 各項目は必ず半角スラッシュ「 / 」で区切ってください。
+- 1単語につき必ず1行で出力してください。
+- 表やMarkdownの表形式にはしないでください。
+- 番号は付けないでください。
+- 箇条書きにしないでください。
+- 余計な説明文、前置き、後書きは書かないでください。
+- 出力はデータ行だけにしてください。
+- 例文は、実際に日常会話・読解・作文で使いやすい自然な文にしてください。
+- 例文では、その単語がよく一緒に使われる語句、つまりコロケーションを意識してください。
+- 日本語訳は直訳ではなく、学習者が理解しやすい自然な訳にしてください。
+- CEFR目安は A1 / A2 / B1 / B2 / C1 / C2 のいずれかで出してください。
+- 領域は、以下の10領域から最も近いものを1つ選んでください。
+
+# 領域一覧
+
+1. 社会・家庭
+2. 教育・連絡
+3. 仕事
+4. 買い物・消費
+5. 文化・余暇
+6. 科学技術・メディア
+7. 健康
+8. 言語圏の文化
+9. 先端技術
+10. 環境
+
+# 品詞の書き方
+
+英語の場合は、以下のように日本語で書いてください。
+
+名詞、動詞、形容詞、副詞、前置詞、接続詞、代名詞、熟語、句動詞、表現
+
+# 補足の書き方
+
+補足には、必要に応じて以下のような情報を書いてください。
+
+- 似た単語との違い
+- フォーマル / カジュアルの違い
+- よく使われる文脈
+- 注意すべき語法
+- 可算 / 不可算
+- 自動詞 / 他動詞
+- 前置詞との組み合わせ
+
+# コロケーションの書き方
+
+コロケーションには、その単語と一緒に使われやすい語句を2〜4個ほど書いてください。
+
+例：
+make a decision, an important decision, a quick decision
+
+# 出力例
+
+apple / りんご / 名詞 / I eat an apple every morning. / 私は毎朝りんごを食べます。 / eat an apple, a red apple, apple juice / 果物を表す基本語。日常会話や食べ物の話題でよく使う。 / 食事・買い物・日常会話 / A1 / 買い物・消費
+
+# 私が登録したい単語・表現
+
+ここに単語を並べます。
+
+[ここに単語を入力]`;
+  navigator.clipboard.writeText(prompt).then(() => {
+    setStatus("プロンプトをクリップボードにコピーしました。ChatGPT / Claude に貼り付けてください。");
+  });
+});
+
+elements.vocabBulkImport.addEventListener("click", async () => {
+  const raw = elements.vocabBulkPaste.value.trim();
+  if (!raw) { setStatus("AI出力を貼り付けてください。"); return; }
+  const language = elements.learningItemLanguage.value;
+  const lines = raw.split("\n").filter(Boolean);
+  const items = lines.map((line) => {
+    const cols = line.split(" / ");
+    return {
+      type: "vocabulary",
+      language,
+      title: (cols[0] || "").trim(),
+      meaning: (cols[1] || "").trim(),
+      pos: (cols[2] || "").trim(),
+      example: (cols[3] || "").trim(),
+      exampleTranslation: (cols[4] || "").trim(),
+      collocation: (cols[5] || "").trim(),
+      note: (cols[6] || "").trim(),
+      scene: (cols[7] || "").trim(),
+      cefr: (cols[8] || "").trim(),
+      domain: (cols[9] || "").trim(),
+      tags: [(cols[8] || "").trim(), (cols[9] || "").trim()].filter(Boolean)
+    };
+  }).filter((item) => item.title);
+
+  if (!items.length) { setStatus("有効な単語が見つかりませんでした。タブ区切りか確認してください。"); return; }
+
+  await withBusy(async () => {
+    for (const item of items) {
+      const data = await learningItemsRepository.createLearningItem(item);
+      await createInitialSrsData(data.item.id);
+    }
+    elements.vocabBulkPaste.value = "";
+    elements.vocabBulkWords.value = "";
+    await loadLearningItems();
+    setStatus(`${items.length}件の単語を一括登録しました。`);
+  }, "単語を一括登録しています...");
+});
+
 elements.learningItemForm.addEventListener("submit", saveLearningItem);
 elements.newLearningItem.addEventListener("click", resetLearningItemForm);
 elements.speakLearningItem.addEventListener("click", () => {
