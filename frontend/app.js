@@ -1485,6 +1485,20 @@ function switchPage(pageId) {
     page.classList.toggle("active", page.id === `page-${pageId}`);
   });
 
+  // inner topbar: show on non-home pages
+  const innerTopbar = document.getElementById("inner-topbar");
+  const innerTitle  = document.getElementById("inner-page-title");
+  if (innerTopbar) {
+    const pageTitles = {
+      course: "学習タイマー", "learning-items": "学習アイテム登録",
+      audio: "音声練習", dictation: "ディクテーション",
+      recording: "音読録音", notebook: "単語帳",
+      history: "学習履歴", review: "SRS復習",
+    };
+    innerTopbar.classList.toggle("hidden", pageId === "home");
+    if (innerTitle) innerTitle.textContent = pageTitles[pageId] || "";
+  }
+
   if (pageId === "history") {
     loadHistory();
   }
@@ -3613,6 +3627,36 @@ elements.navButtons.forEach((button) => {
 elements.homeButtons.forEach((button) => {
   button.addEventListener("click", () => switchPage(button.dataset.go));
 });
+
+// Home course-time buttons (30 / 60 / 90 min)
+document.querySelectorAll(".course-time-btn").forEach((button) => {
+  button.addEventListener("click", () => {
+    const duration = button.dataset.duration;
+    const durationSelect = document.querySelector("#course-filter-duration");
+    if (durationSelect && duration) durationSelect.value = duration;
+    switchPage("course");
+  });
+});
+
+// Back button in inner topbar
+const backBtn = document.querySelector(".back-btn[data-go='home']");
+if (backBtn) backBtn.addEventListener("click", () => switchPage("home"));
+
+// Update home streak badge from history
+function updateHomeStreak() {
+  const streakEl = document.getElementById("home-streak-num");
+  const badgeEl  = document.getElementById("home-streak-badge");
+  if (!streakEl) return;
+  const streakDays = document.getElementById("history-streak-days");
+  if (streakDays) {
+    const val = parseInt(streakDays.textContent, 10) || 0;
+    streakEl.textContent = val;
+    if (badgeEl) badgeEl.style.display = val > 0 ? "" : "none";
+  }
+}
+// refresh streak when history loads
+const origLoadHistory = typeof loadHistory === "function" ? loadHistory : null;
+document.addEventListener("historyLoaded", updateHomeStreak);
 
 elements.learningItemSearch.addEventListener("click", loadLearningItems);
 elements.learningItemForm.addEventListener("submit", saveLearningItem);
