@@ -531,3 +531,14 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
   .course-time-btn.btn-30, .course-time-btn.btn-90 { width: 96px; height: 96px; }
   .home-sub-btns { flex-direction: column; max-width: 280px; }
 }
+
+/* ── PDF Import ── */
+.pdf-import-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.pdf-label { font-size: 0.85em; color: var(--accent); font-weight: 600; white-space: nowrap; }
+#pdf-file-input { font-size: 0.85em; }
+#pdf-status { font-size: 0.82em; }
+
+/* ── Vocab import flow ── */
+.vocab-import-flow { gap: 12px; }
+.vocab-step { display: flex; flex-direction: column; gap: 6px; }
+.step-label { font-size: 0.88em; color: var(--text-muted, #aaa); margin: 0; }
