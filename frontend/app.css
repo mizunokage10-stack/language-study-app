@@ -384,6 +384,25 @@ button[type="submit"],
   gap: 12px;
 }
 
+.course-item-card {
+  padding: 12px 14px;
+  border: 1px solid #dde6f0;
+  border-radius: 12px;
+  background: #f7f9fc;
+}
+
+.course-item-card strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.course-item-example {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: #555;
+  font-style: italic;
+}
+
 .tts-inline-actions {
   margin-top: 12px;
 }

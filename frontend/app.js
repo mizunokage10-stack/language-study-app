@@ -2466,6 +2466,18 @@ function renderCourseTimer() {
   }
 }
 
+function renderCourseItemCard(item) {
+  const sub = item.meaning || item.exampleTranslation || item.content || "";
+  const example = item.example || "";
+  return `
+    <div class="course-item-card">
+      <strong>${escapeHtml(item.title)}</strong>
+      ${sub ? `<p class="muted">${escapeHtml(sub)}</p>` : ""}
+      ${example ? `<p class="course-item-example">${escapeHtml(example)}</p>` : ""}
+    </div>
+  `;
+}
+
 function renderCourseStepUi(step) {
   const run = state.courseRun;
   const srsCount = state.reviewQueue.length;
@@ -2611,7 +2623,7 @@ function renderCourseStepUi(step) {
 
     const localSection = localItems.length
       ? `<div class="course-step-ui-grid">${localItems
-          .map((item) => `<div><strong>${escapeHtml(item.title)}</strong><p class="muted">${escapeHtml(item.meaning || item.exampleTranslation || item.content || "")}</p></div>`)
+          .map((item) => renderCourseItemCard(item))
           .join("")}</div>`
       : "";
 
