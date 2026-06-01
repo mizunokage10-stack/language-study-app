@@ -26,6 +26,7 @@ const state = {
   courseTimerId: null,
   dbVocabulary: [],
   dbReadingMaterials: [],
+  vocabQuiz: { queue: [], index: 0, mode: "meaning", phase: "input" },
   courseFilters: { language: "english", cefrLevel: "A1", domain: "", duration: "" },
   ttsVoices: [],
   ttsRequestId: 0,
@@ -177,7 +178,7 @@ const coursePresets = [
     totalMinutes: 30,
     description: "忙しい日でも最低限",
     steps: [
-      { id: "srs-5", title: "SRS復習", type: "srs", minutes: 5, instructions: "今日復習すべき学習アイテムを短時間で確認します。" },
+      { id: "vocab-5", title: "単語学習", type: "vocab-quiz", minutes: 5, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening-7", title: "リスニング", type: "listening", minutes: 7, instructions: "登録済みのlisteningまたはsentenceを聞く練習です。" },
       { id: "recording-5", title: "音読", type: "recording", minutes: 5, instructions: "例文や本文を声に出して読みます。録音機能は今後接続します。" },
       { id: "reading-8", title: "読解・例文確認", type: "reading", minutes: 8, instructions: "登録済みの例文や本文を読み、意味と構造を確認します。" },
@@ -190,7 +191,7 @@ const coursePresets = [
     totalMinutes: 60,
     description: "標準バランス学習",
     steps: [
-      { id: "srs-10", title: "SRS復習", type: "srs", minutes: 10, instructions: "今日復習すべき学習アイテムを確認します。" },
+      { id: "vocab-10", title: "単語学習", type: "vocab-quiz", minutes: 10, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "dictation-10", title: "ディクテーション", type: "dictation", minutes: 10, instructions: "聞き取った内容を書き取る練習です。音声機能は今後接続します。" },
       { id: "recording-10", title: "音読・録音", type: "recording", minutes: 10, instructions: "本文や例文を音読します。録音機能は今後接続します。" },
       { id: "grammar-15", title: "読解・文法確認", type: "grammar", minutes: 15, instructions: "登録済みの文法・例文を確認します。" },
@@ -204,7 +205,7 @@ const coursePresets = [
     totalMinutes: 90,
     description: "しっかり集中学習",
     steps: [
-      { id: "srs-15", title: "SRS復習", type: "srs", minutes: 15, instructions: "今日復習すべき学習アイテムをしっかり確認します。" },
+      { id: "vocab-15", title: "単語学習", type: "vocab-quiz", minutes: 15, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "grammar-15", title: "精読・文法分析", type: "grammar", minutes: 15, instructions: "文法や例文の構造を分析します。" },
       { id: "dictation-10", title: "ディクテーション", type: "dictation", minutes: 10, instructions: "聞き取った内容を書き取る練習です。" },
       { id: "shadowing-15", title: "リスニング・シャドーイング", type: "shadowing", minutes: 15, instructions: "登録済みのlisteningまたはsentenceでシャドーイングします。" },
@@ -219,7 +220,7 @@ const coursePresets = [
     totalMinutes: 120,
     description: "週末の集中学習向け",
     steps: [
-      { id: "srs-20", title: "SRS復習", type: "srs", minutes: 20, instructions: "今日復習すべき学習アイテムをしっかり確認します。" },
+      { id: "vocab-20", title: "単語学習", type: "vocab-quiz", minutes: 20, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "vocabulary-20", title: "語彙学習", type: "reading", minutes: 20, instructions: "新しい語彙を文脈と一緒に確認します。" },
       { id: "grammar-20", title: "精読・文法分析", type: "grammar", minutes: 20, instructions: "文法や例文の構造を分析します。" },
       { id: "dictation-15", title: "ディクテーション", type: "dictation", minutes: 15, instructions: "聞き取った内容を書き取る練習です。" },
@@ -2466,6 +2467,243 @@ function renderCourseTimer() {
   }
 }
 
+// ---- 単語学習クイズ ---------------------------------------------------------
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function initVocabQuiz() {
+  const items = state.learningItems.filter(
+    (item) => item.type === "vocabulary" && item.title && item.meaning
+  );
+  state.vocabQuiz = {
+    queue: shuffleArray(items),
+    index: 0,
+    mode: "meaning",
+    phase: "input"
+  };
+}
+
+function currentVocabItem() {
+  const { queue, index } = state.vocabQuiz;
+  return index < queue.length ? queue[index] : null;
+}
+
+function renderVocabQuizCard(container) {
+  const quiz = state.vocabQuiz;
+  const item = currentVocabItem();
+
+  if (!item) {
+    container.innerHTML = `
+      <div class="vocab-quiz-card">
+        <p>${quiz.queue.length === 0
+          ? "単語タイプの学習アイテムがまだありません。「学習アイテム登録」からvocabularyタイプで登録してください。"
+          : "このセッションの問題をすべて終了しました。お疲れ様でした！"}</p>
+        <button type="button" class="soft-button" id="vocab-quiz-restart">最初からやり直す</button>
+      </div>
+    `;
+    container.querySelector("#vocab-quiz-restart")?.addEventListener("click", () => {
+      initVocabQuiz();
+      renderVocabQuizCard(container);
+    });
+    return;
+  }
+
+  const progress = `${quiz.index + 1} / ${quiz.queue.length}`;
+
+  if (quiz.mode === "meaning" && quiz.phase === "input") {
+    container.innerHTML = `
+      <div class="vocab-quiz-card">
+        <p class="vocab-quiz-progress muted">${escapeHtml(progress)} ・ 意味入力</p>
+        <p class="vocab-quiz-word">${escapeHtml(item.title)}</p>
+        <label>日本語の意味を入力してください
+          <textarea id="vocab-quiz-input" rows="2" placeholder="意味を入力..."></textarea>
+        </label>
+        <div class="mini-actions">
+          <button type="button" id="vocab-quiz-reveal">答えを確認</button>
+        </div>
+      </div>
+    `;
+    container.querySelector("#vocab-quiz-reveal").addEventListener("click", () => {
+      quiz.phase = "revealed";
+      renderVocabQuizCard(container);
+    });
+  } else if (quiz.mode === "meaning" && quiz.phase === "revealed") {
+    const userInput = container.querySelector("#vocab-quiz-input")?.value || "";
+    container.innerHTML = `
+      <div class="vocab-quiz-card">
+        <p class="vocab-quiz-progress muted">${escapeHtml(progress)} ・ 意味入力</p>
+        <p class="vocab-quiz-word">${escapeHtml(item.title)}</p>
+        <div class="vocab-quiz-answer-block">
+          <p class="muted">あなたの回答:</p>
+          <p>${escapeHtml(userInput || "（未入力）")}</p>
+          <p class="muted">正解:</p>
+          <p class="vocab-quiz-correct-answer">${escapeHtml(item.meaning)}</p>
+        </div>
+        <p>正解でしたか？</p>
+        <div class="mini-actions">
+          <button type="button" id="vocab-quiz-correct">正解</button>
+          <button type="button" id="vocab-quiz-wrong" class="soft-button">不正解</button>
+        </div>
+      </div>
+    `;
+    container.querySelector("#vocab-quiz-correct").addEventListener("click", () => advanceVocabQuiz(container, true));
+    container.querySelector("#vocab-quiz-wrong").addEventListener("click", () => advanceVocabQuiz(container, false));
+  } else if (quiz.mode === "spelling" && quiz.phase === "input") {
+    container.innerHTML = `
+      <div class="vocab-quiz-card">
+        <p class="vocab-quiz-progress muted">${escapeHtml(progress)} ・ スペル入力</p>
+        <p class="muted">音声を聞いて、スペルを入力してください</p>
+        <div class="mini-actions">
+          <button type="button" id="vocab-quiz-play" class="soft-button">▶ 音声を再生</button>
+        </div>
+        <label>スペルを入力
+          <input type="text" id="vocab-quiz-input" placeholder="スペルを入力..." autocomplete="off" />
+        </label>
+        <div class="mini-actions">
+          <button type="button" id="vocab-quiz-reveal">答えを確認</button>
+        </div>
+      </div>
+    `;
+    container.querySelector("#vocab-quiz-play").addEventListener("click", () => {
+      speakLearningItem(item, { rate: 0.8 });
+    });
+    container.querySelector("#vocab-quiz-reveal").addEventListener("click", () => {
+      quiz.phase = "revealed";
+      renderVocabQuizCard(container);
+    });
+  } else if (quiz.mode === "spelling" && quiz.phase === "revealed") {
+    const userInput = container.querySelector("#vocab-quiz-input")?.value || "";
+    const isCorrect = userInput.trim().toLowerCase() === item.title.trim().toLowerCase();
+    container.innerHTML = `
+      <div class="vocab-quiz-card">
+        <p class="vocab-quiz-progress muted">${escapeHtml(progress)} ・ スペル入力</p>
+        <div class="vocab-quiz-answer-block">
+          <p class="muted">あなたの回答:</p>
+          <p>${escapeHtml(userInput || "（未入力）")}</p>
+          <p class="muted">正解:</p>
+          <p class="vocab-quiz-correct-answer">${escapeHtml(item.title)}</p>
+          ${item.meaning ? `<p class="muted">意味: ${escapeHtml(item.meaning)}</p>` : ""}
+        </div>
+        <p>正解でしたか？${isCorrect ? " ✓ スペルが一致しています" : " ✗ スペルが異なります"}</p>
+        <div class="mini-actions">
+          <button type="button" id="vocab-quiz-correct">正解</button>
+          <button type="button" id="vocab-quiz-wrong" class="soft-button">不正解</button>
+        </div>
+      </div>
+    `;
+    container.querySelector("#vocab-quiz-correct").addEventListener("click", () => advanceVocabQuiz(container, true));
+    container.querySelector("#vocab-quiz-wrong").addEventListener("click", () => advanceVocabQuiz(container, false));
+  }
+}
+
+async function advanceVocabQuiz(container, correct) {
+  const quiz = state.vocabQuiz;
+  const item = currentVocabItem();
+  if (!item) return;
+
+  // SRS更新
+  try {
+    const rating = correct ? "normal" : "forgot";
+    await srsRepository.updateSrsAfterReview(item.id, rating).catch(() => null);
+  } catch (_) { /* SRSデータがなければスキップ */ }
+
+  // コースの復習記録を更新
+  if (state.courseRun) {
+    state.courseRun.reviewedItemIds = uniqueValues([...state.courseRun.reviewedItemIds, item.id]);
+    if (!correct) {
+      state.courseRun.mistakeItemIds = uniqueValues([...state.courseRun.mistakeItemIds, item.id]);
+    }
+  }
+
+  // 次の問題へ・モードを交互に切り替え
+  quiz.index += 1;
+  quiz.mode = quiz.mode === "meaning" ? "spelling" : "meaning";
+  quiz.phase = "input";
+
+  renderVocabQuizCard(container);
+}
+
+// ---- DB教材タブ -------------------------------------------------------------
+
+async function loadDbMaterialsTab() {
+  const language = document.querySelector("#db-materials-language")?.value || "english";
+  const cefrLevel = document.querySelector("#db-materials-cefr")?.value || "A1";
+  const listEl = document.querySelector("#db-materials-list");
+  if (!listEl) return;
+
+  listEl.innerHTML = "<p>読み込み中...</p>";
+  try {
+    const data = await materialsRepository.getVocabulary({ language, cefrLevel, domain: "", limit: 50 });
+    const items = data.items || [];
+    if (!items.length) {
+      listEl.innerHTML = "<p>該当する教材がありません。</p>";
+      return;
+    }
+    listEl.innerHTML = `
+      <div class="db-materials-grid">
+        ${items.map((item) => `
+          <div class="db-material-row">
+            <div>
+              <strong>${escapeHtml(item.word || item.title || "")}</strong>
+              <span class="eyebrow"> ${escapeHtml(item.cefr_level || "")}</span>
+              <p class="muted">${escapeHtml(item.meaning_ja || item.meaning || "")}</p>
+              ${item.example ? `<p class="course-item-example">${escapeHtml(item.example)}</p>` : ""}
+            </div>
+            <button type="button" class="soft-button db-import-btn" data-id="${escapeHtml(String(item.id))}">＋追加</button>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    listEl.querySelectorAll(".db-import-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const itemId = btn.dataset.id;
+        const vocab = items.find((v) => String(v.id) === itemId);
+        if (!vocab) return;
+        btn.disabled = true;
+        btn.textContent = "追加中...";
+        try {
+          await importDbVocabAsLearningItem(vocab);
+          btn.textContent = "✓ 追加済み";
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "＋追加";
+          setStatus(err.message || "追加に失敗しました。");
+        }
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = `<p class="muted">${escapeHtml(err.message || "読み込みに失敗しました。")}</p>`;
+  }
+}
+
+async function importDbVocabAsLearningItem(vocab) {
+  const payload = {
+    type: "vocabulary",
+    language: vocab.language || "english",
+    title: vocab.word || vocab.title || "",
+    meaning: vocab.meaning_ja || vocab.meaning || "",
+    content: vocab.definition || vocab.content || "",
+    example: vocab.example || "",
+    exampleTranslation: vocab.example_ja || vocab.example_translation || "",
+    note: `DB教材 (${vocab.cefr_level || ""})`,
+    tags: [vocab.cefr_level || ""].filter(Boolean)
+  };
+  const result = await learningItemsRepository.createLearningItem(payload);
+  const newItem = result.item;
+  if (newItem?.id) {
+    await srsRepository.createInitialSrsData(newItem.id).catch(() => null);
+  }
+  state.learningItems = [newItem, ...state.learningItems];
+  setStatus(`「${payload.title}」を学習アイテムに追加しました。`);
+}
+
 function renderCourseItemCard(item) {
   const sub = item.meaning || item.exampleTranslation || item.content || "";
   const example = item.example || "";
@@ -2482,26 +2720,10 @@ function renderCourseStepUi(step) {
   const run = state.courseRun;
   const srsCount = state.reviewQueue.length;
 
-  if (step.type === "srs") {
-    elements.courseStepUi.innerHTML = `
-      <div class="course-step-ui-grid">
-        <p>既存の「今日のSRS復習」と同じ対象を使います。</p>
-        <p>現在読み込み済みの復習対象数: ${escapeHtml(String(srsCount))}</p>
-        <div class="mini-actions">
-          <button type="button" class="soft-button" id="course-load-srs">復習対象数を更新</button>
-          <button type="button" id="course-open-srs">今日のSRS復習を開く</button>
-        </div>
-      </div>
-    `;
+  if (step.type === "vocab-quiz") {
+    initVocabQuiz();
+    renderVocabQuizCard(elements.courseStepUi);
     run.renderedStepIndex = run.currentStepIndex;
-    document.querySelector("#course-load-srs").addEventListener("click", async () => {
-      await loadReviewItems();
-      if (state.courseRun) {
-        state.courseRun.renderedStepIndex = -1;
-        renderCourseTimer();
-      }
-    });
-    document.querySelector("#course-open-srs").addEventListener("click", () => switchPage("review"));
     return;
   }
 
@@ -3525,7 +3747,19 @@ elements.studyLogTableBody.addEventListener("click", async (event) => {
   }
 });
 
-elements.loadReviewCard.addEventListener("click", loadReviewItems);
+elements.loadReviewCard?.addEventListener("click", loadReviewItems);
+
+// DB教材タブ
+document.querySelectorAll(".tab-button[data-tab]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-button[data-tab]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    document.getElementById("tab-my-items").style.display = tab === "my-items" ? "" : "none";
+    document.getElementById("tab-db-materials").style.display = tab === "db-materials" ? "" : "none";
+  });
+});
+document.querySelector("#db-materials-search")?.addEventListener("click", loadDbMaterialsTab);
 elements.revealReviewAnswer.addEventListener("click", revealReviewAnswer);
 elements.reviewAnswerArea.addEventListener("click", (event) => {
   if (event.target.classList.contains("tts-review-current")) {
