@@ -335,6 +335,10 @@ async function handleLogout() {
 }
 
 function initAuth() {
+  if (window.__langDeskAuthBound) {
+    return;
+  }
+
   elements.authLogin.addEventListener("click", handleLogin);
   elements.authSignup.addEventListener("click", handleSignup);
   elements.authLogout.addEventListener("click", handleLogout);
