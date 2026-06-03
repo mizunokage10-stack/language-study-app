@@ -444,17 +444,25 @@
 
 以下の条件に従って、必ずJSONのみを出力してください。説明文、前置き、Markdownのコードブロックは不要です。
 
+【重要】JSON文字列の中でダブルクォート（"）を使ってはいけません。explanation・explanationJa・note・instruction などの説明文中で英語フレーズや語句を引用する場合は、ダブルクォートの代わりに必ず 「 」（鍵括弧）を使ってください。
+例（正）: "explanation": "本文の冒頭で 「Outdoor drinking should be prohibited」 と述べており..."
+例（誤）: "explanation": "本文の冒頭で "Outdoor drinking should be prohibited" と述べており..."
+
 {
   "type": "reading_text",
   "title": "",
-  "language": "",
-  "level": "",
+  "language": "en",
+  "level": "B2",
   "domain": "",
   "sourceNote": "ユーザー貼り付け教材",
   "originalText": "",
   "japaneseTranslation": "",
   "firstReading": { "targetSeconds": 0, "instruction": "" },
-  "comprehensionQuestions": [{ "question": "", "choices": ["", "", ""], "answer": "", "explanation": "" }],
+  "comprehensionQuestions": [
+    { "question": "", "choices": ["", "", ""], "answer": "", "explanation": "" },
+    { "question": "", "choices": ["", "", ""], "answer": "", "explanation": "" },
+    { "question": "", "choices": ["", "", ""], "answer": "", "explanation": "" }
+  ],
   "intensiveReading": {
     "vocabulary": [{ "word": "", "meaningJa": "", "partOfSpeech": "", "note": "" }],
     "chunks": [{ "chunk": "", "meaningJa": "", "note": "" }],
@@ -465,6 +473,9 @@
   "oralPractice": { "instruction": "", "focusChunks": [""] },
   "oneSentenceOutput": { "instruction": "", "recommendedExpressions": ["", ""] }
 }
+
+※ language は英語なら "en"、中国語なら "zh" を使ってください。
+※ level は CEFR レベル（A1 / A2 / B1 / B2 / C1）を使ってください。
 
 変換する文章：</pre>
                 </div>

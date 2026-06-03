@@ -2464,6 +2464,7 @@ function createCourseRun(course) {
     readingSubStep: 0,
     readingMaterial: null,
     readingComprehensionAnswer: null,
+    readingComprehensionQuestionIndex: 0,
     readingOutputText: "",
     startedAt: new Date().toISOString(),
     stepStartedAt: new Date().toISOString(),
@@ -2972,11 +2973,13 @@ function renderReadingCourseStep(container) {
         <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">精読・語彙整理へ</button></div>
       `;
     } else {
-      const q = questions[0];
+      const qi = run.readingComprehensionQuestionIndex || 0;
+      const q = questions[qi];
       const answered = run.readingComprehensionAnswer;
+      const isLast = qi >= questions.length - 1;
       content = `
         <section class="section-card">
-          <h4>${stepInfo.label}</h4>
+          <h4>${stepInfo.label}（${qi + 1} / ${questions.length}）</h4>
           <p>${escapeHtml(q.question || "")}</p>
           <div class="comprehension-choices">
             ${(q.choices || []).map((choice) => `
@@ -2992,7 +2995,14 @@ function renderReadingCourseStep(container) {
             ${q.explanation ? `<p class="muted">${escapeHtml(q.explanation)}</p>` : ""}
           ` : ""}
         </section>
-        ${answered ? `<div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">精読・語彙整理へ</button></div>` : ""}
+        ${answered ? `
+          <div class="mini-actions">
+            ${isLast
+              ? `<button type="button" id="reading-substep-next" class="soft-button">精読・語彙整理へ</button>`
+              : `<button type="button" id="reading-next-question" class="soft-button">次の問題へ</button>`
+            }
+          </div>
+        ` : ""}
       `;
     }
   } else if (subStep === 2) {
@@ -3136,6 +3146,12 @@ function renderReadingCourseStep(container) {
     });
   });
 
+  container.querySelector("#reading-next-question")?.addEventListener("click", () => {
+    run.readingComprehensionQuestionIndex = (run.readingComprehensionQuestionIndex || 0) + 1;
+    run.readingComprehensionAnswer = null;
+    renderReadingCourseStep(container);
+  });
+
   container.querySelector("#reading-tts-play")?.addEventListener("click", () => {
     const lang = mat.language === "zh" ? "zh-TW" : "en-US";
     speakText(mat.originalText || "", { language: lang });
@@ -3235,6 +3251,7 @@ function renderCourseStepUi(step) {
   if (step.type === "reading") {
     run.readingSubStep = 0;
     run.readingComprehensionAnswer = null;
+    run.readingComprehensionQuestionIndex = 0;
     run.renderedStepIndex = run.currentStepIndex; // タイマーループの重複呼び出しを防ぐ
     loadLocalReadingMaterials().then(() => {
       if (!run.readingMaterial) run.readingMaterial = selectReadingMaterial();
