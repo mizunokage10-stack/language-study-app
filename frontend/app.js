@@ -510,15 +510,12 @@ function renderTtsVoiceOptions() {
 
   const selectedLanguage = elements.ttsLanguage.value;
   const currentVoice = elements.ttsVoice.value;
-  const voices = [...state.ttsVoices]
-    .filter((v) => {
-      const lang = String(v.lang || "").toLowerCase();
-      return lang.startsWith("zh") || lang.startsWith("en");
-    })
-    .sort((a, b) => {
-      const scoreDiff = voiceLanguageScore(a, selectedLanguage) - voiceLanguageScore(b, selectedLanguage);
-      return scoreDiff || a.name.localeCompare(b.name);
-    });
+  // ドロップダウンには英語用・中国語用の固定音声のみ表示する
+  const enVoice = preferredVoiceForLang("en-US");
+  const zhVoice = preferredVoiceForLang("zh-TW");
+  const voices = [enVoice, zhVoice].filter(Boolean).filter(
+    (v, i, arr) => arr.findIndex((x) => x.voiceURI === v.voiceURI) === i
+  );
 
   elements.ttsVoice.innerHTML = `
     <option value="">ブラウザの自動選択</option>
@@ -555,6 +552,32 @@ function selectedTtsVoice() {
   return state.ttsVoices.find((voice) => voice.voiceURI === elements.ttsVoice.value) || null;
 }
 
+// 言語ごとに固定音声を返す。見つからない場合は lang の最適一致にフォールバック。
+function preferredVoiceForLang(language) {
+  const lang = String(language || "").toLowerCase();
+  const all = state.ttsVoices;
+
+  if (lang.startsWith("en")) {
+    // 優先: Eddy (en-US)
+    const eddy = all.find((v) => /eddy/i.test(v.name) && String(v.lang).toLowerCase().startsWith("en"));
+    if (eddy) return eddy;
+    // フォールバック: en-US の最初の音声
+    return all.find((v) => String(v.lang).toLowerCase().startsWith("en-us")) ||
+           all.find((v) => String(v.lang).toLowerCase().startsWith("en")) || null;
+  }
+
+  if (lang.startsWith("zh")) {
+    // 優先: Google 國語（臺灣）(zh-TW)
+    const google = all.find((v) => /google.*國語|國語.*google/i.test(v.name) && String(v.lang).toLowerCase().startsWith("zh"));
+    if (google) return google;
+    // フォールバック: zh-TW の最初の音声
+    return all.find((v) => String(v.lang).toLowerCase().startsWith("zh-tw")) ||
+           all.find((v) => String(v.lang).toLowerCase().startsWith("zh")) || null;
+  }
+
+  return null;
+}
+
 function updateTtsSliderLabels() {
   elements.ttsRateValue.textContent = Number(elements.ttsRate.value).toFixed(2);
   elements.ttsPitchValue.textContent = Number(elements.ttsPitch.value).toFixed(2);
@@ -586,7 +609,8 @@ function speakText(text, options = {}) {
 
   const utterance = new SpeechSynthesisUtterance(value);
   const language = options.language || elements.ttsLanguage.value;
-  const voice = options.voice || selectedTtsVoice();
+  // 言語が英語・中国語の場合は固定音声を使用。それ以外はドロップダウン選択を使用。
+  const voice = options.voice || preferredVoiceForLang(language) || selectedTtsVoice();
 
   if (language) {
     utterance.lang = language;
