@@ -359,6 +359,13 @@ function initAuth() {
   elements.authLogin.addEventListener("click", handleLogin);
   elements.authSignup.addEventListener("click", handleSignup);
   elements.authLogout.addEventListener("click", handleLogout);
+
+  elements.authPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleLogin();
+  });
+  elements.authEmail.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") elements.authPassword.focus();
+  });
 }
 
 // ---- ここまで認証 --------------------------------------------------------
