@@ -276,13 +276,16 @@ async function handleLogin() {
   }
 
   setAuthMessage("ログイン中...");
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    setAuthMessage(error.message || "ログインに失敗しました。", true);
-  } else {
-    elements.authPassword.value = "";
-    setAuthMessage("");
+  try {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setAuthMessage(error.message || "ログインに失敗しました。", true);
+    } else {
+      elements.authPassword.value = "";
+      setAuthMessage("");
+    }
+  } catch (e) {
+    setAuthMessage(e.message || "ログインに失敗しました。", true);
   }
 }
 
@@ -306,13 +309,16 @@ async function handleSignup() {
   }
 
   setAuthMessage("登録中...");
-  const { error } = await supabase.auth.signUp({ email, password });
-
-  if (error) {
-    setAuthMessage(error.message || "登録に失敗しました。", true);
-  } else {
-    setAuthMessage("確認メールを送信しました。メールを確認してください。");
-    elements.authPassword.value = "";
+  try {
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      setAuthMessage(error.message || "登録に失敗しました。", true);
+    } else {
+      setAuthMessage("確認メールを送信しました。メールを確認してください。");
+      elements.authPassword.value = "";
+    }
+  } catch (e) {
+    setAuthMessage(e.message || "登録に失敗しました。", true);
   }
 }
 
@@ -329,33 +335,6 @@ async function handleLogout() {
 }
 
 function initAuth() {
-  if (!supabase) {
-    setAuthMessage("Supabase未設定です。NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY を設定してください。", true);
-    return;
-  }
-
-  supabase.auth.getSession().then(({ data, error }) => {
-    if (error) {
-      state.authReady = true;
-      setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
-      return;
-    }
-    renderAuthPanel(data.session?.user ?? null);
-  });
-
-  supabase.auth.onAuthStateChange((_event, session) => {
-    renderAuthPanel(session?.user ?? null);
-    if (state.currentPage === "learning-items") {
-      loadLearningItems();
-    }
-    if (state.currentPage === "review") {
-      loadReviewItems();
-    }
-    if (state.currentPage === "history") {
-      loadHistory();
-    }
-  });
-
   elements.authLogin.addEventListener("click", handleLogin);
   elements.authSignup.addEventListener("click", handleSignup);
   elements.authLogout.addEventListener("click", handleLogout);
@@ -366,6 +345,38 @@ function initAuth() {
   elements.authEmail.addEventListener("keydown", (e) => {
     if (e.key === "Enter") elements.authPassword.focus();
   });
+
+  if (!supabase) {
+    setAuthMessage("Supabase未設定です。NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY を設定してください。", true);
+    return;
+  }
+
+  try {
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        state.authReady = true;
+        setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
+        return;
+      }
+      renderAuthPanel(data.session?.user ?? null);
+    });
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      renderAuthPanel(session?.user ?? null);
+      if (state.currentPage === "learning-items") {
+        loadLearningItems();
+      }
+      if (state.currentPage === "review") {
+        loadReviewItems();
+      }
+      if (state.currentPage === "history") {
+        loadHistory();
+      }
+    });
+  } catch (error) {
+    state.authReady = true;
+    setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
+  }
 }
 
 // ---- ここまで認証 --------------------------------------------------------
