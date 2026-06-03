@@ -211,7 +211,7 @@
           </button>
           <button class="sub-btn btn-items" data-go="learning-items" type="button">
             <span class="sub-btn-icon">📝</span>
-            学習アイテム
+            単語/文章登録
           </button>
         </div>
 
@@ -257,37 +257,20 @@
         </div>
 
         <section id="course-select-view" class="stack">
-          <section class="card stack" id="course-material-filter">
-            <h3>教材設定</h3>
-            <div class="filter-bar">
-              <label>言語
-                <select id="course-filter-language">
-                  <option value="english">英語</option>
-                  <option value="chinese">中国語</option>
-                </select>
-              </label>
-              <label>CEFRレベル
-                <select id="course-filter-cefr">
-                  <option value="A1">A1</option><option value="A2">A2</option>
-                  <option value="B1">B1</option><option value="B2">B2</option>
-                  <option value="C1">C1</option>
-                </select>
-              </label>
-              <label>領域
-                <select id="course-filter-domain"><option value="">すべて</option></select>
-              </label>
-              <label>学習時間
-                <select id="course-filter-duration">
-                  <option value="">すべて</option>
-                  <option value="30">30分</option>
-                  <option value="60">60分</option>
-                  <option value="90">90分</option>
-                  <option value="120">120分</option>
+          <section class="card" id="course-material-filter">
+            <div class="course-lang-select-row">
+              <label class="course-lang-label">学習する言語
+                <select id="course-filter-language" class="course-lang-select">
+                  <option value="english">🇬🇧 英語</option>
+                  <option value="chinese">🇨🇳 中国語</option>
                 </select>
               </label>
             </div>
-            <div id="course-materials-message" class="auth-message"></div>
-            <button type="button" id="course-filter-apply">教材を読み込む</button>
+            <!-- 非表示：app.js互換用 -->
+            <select id="course-filter-cefr" style="display:none"><option value="A1">A1</option></select>
+            <select id="course-filter-domain" style="display:none"><option value="">すべて</option></select>
+            <select id="course-filter-duration" style="display:none"><option value="">すべて</option></select>
+            <div id="course-materials-message" style="display:none"></div>
           </section>
           <div class="course-grid" id="course-preset-list"></div>
         </section>
@@ -346,114 +329,146 @@
       <!-- ══════════════════ LEARNING ITEMS PAGE ══════════════════ -->
       <section class="page" id="page-learning-items">
         <div class="page-header">
-          <div><p class="eyebrow">Learning Items</p><h2>学習アイテム登録</h2></div>
+          <div><p class="eyebrow">Register</p><h2>単語登録 / 文章登録</h2></div>
           <div class="tab-bar">
-            <button type="button" class="tab-button active" data-tab="my-items">マイアイテム</button>
+            <button type="button" class="tab-button active" data-tab="my-items">単語登録</button>
+            <button type="button" class="tab-button" data-tab="reading-materials">文章登録</button>
             <button type="button" class="tab-button" data-tab="db-materials">DB教材</button>
           </div>
         </div>
 
+        <!-- 単語登録タブ（フォームのみ） -->
         <div id="tab-my-items">
-          <div class="filter-bar card">
-            <label>言語フィルター
-              <select id="learning-item-language-filter">
-                <option value="">すべて</option><option value="english">英語</option>
-                <option value="chinese">中国語</option><option value="other">その他</option>
-              </select>
-            </label>
-            <label>種類フィルター
-              <select id="learning-item-type-filter">
-                <option value="">すべて</option><option value="vocabulary">単語</option>
-                <option value="reading">読解テキスト</option>
-              </select>
-            </label>
-            <label class="grow">検索
-              <input id="learning-item-query" type="text" placeholder="タイトル、意味、内容、タグで検索" />
-            </label>
-            <button type="button" id="learning-item-search" class="soft-button">検索</button>
+          <!-- 非表示の互換用要素 -->
+          <input id="learning-item-id" type="hidden" />
+          <input id="learning-item-type" type="hidden" value="vocabulary" />
+          <input id="learning-item-title" type="hidden" />
+          <input id="learning-item-meaning" type="hidden" />
+          <input id="learning-item-pos" type="hidden" />
+          <textarea id="learning-item-example" style="display:none"></textarea>
+          <textarea id="learning-item-example-translation" style="display:none"></textarea>
+          <input id="learning-item-tags" type="hidden" />
+          <input id="learning-item-note" type="hidden" />
+          <input id="learning-item-title-reading" type="hidden" />
+          <input id="learning-item-tags-reading" type="hidden" />
+          <input id="learning-item-language-filter" type="hidden" value="" />
+          <input id="learning-item-type-filter" type="hidden" value="" />
+          <input id="learning-item-query" type="hidden" value="" />
+          <button id="learning-item-search" type="button" style="display:none">検索</button>
+          <tbody id="learning-item-table-body" style="display:none"></tbody>
+          <div id="vocab-fields" style="display:none"></div>
+          <div id="reading-fields" style="display:none">
+            <textarea id="learning-item-content" style="display:none"></textarea>
           </div>
-          <div class="two-column wide-right">
+
+          <div class="register-page-layout">
+            <div class="mini-actions" style="margin-bottom: 1rem;">
+              <button type="button" class="soft-button" data-go="vocab-list">📋 登録した単語を一覧で見る</button>
+            </div>
+
             <section class="card">
-              <div class="table-wrap">
-                <table>
-                  <thead><tr><th>タイトル</th><th>種類</th><th>言語</th><th>タグ</th><th>操作</th></tr></thead>
-                  <tbody id="learning-item-table-body"></tbody>
-                </table>
-              </div>
-            </section>
-            <section class="card">
-              <h3>新規登録 / 編集</h3>
-              <form id="learning-item-form" class="stack">
-                <input id="learning-item-id" type="hidden" />
-                <div class="field-row">
-                  <label>言語
+              <h3>単語を一括登録</h3>
+              <p class="muted">AIに頼んで単語を一括登録できます。</p>
+              <div class="vocab-import-flow stack">
+                <div class="vocab-step">
+                  <p class="step-label">① 下のプロンプトをコピーして ChatGPT / Claude に貼り付ける</p>
+                  <div class="mini-actions">
+                    <button type="button" id="copy-vocab-prompt" class="soft-button">プロンプトをコピー</button>
+                  </div>
+                </div>
+                <div class="vocab-step">
+                  <p class="step-label">② プロンプト末尾に覚えたい単語を追記して送信する</p>
+                </div>
+                <div class="vocab-step">
+                  <p class="step-label">③ AI の出力結果をそのまま下欄に貼り付けて「一括登録」</p>
+                  <label>
+                    言語
                     <select id="learning-item-language">
-                      <option value="english">英語</option><option value="chinese">中国語</option>
+                      <option value="english">英語</option>
+                      <option value="chinese">中国語</option>
                       <option value="other">その他</option>
                     </select>
                   </label>
-                  <label>種類
-                    <select id="learning-item-type">
-                      <option value="vocabulary">単語</option>
-                      <option value="reading">読解テキスト</option>
-                    </select>
+                  <label>AI出力を貼り付け
+                    <textarea id="vocab-bulk-paste" rows="6" placeholder="poverty / 貧困 / 名詞 / ..."></textarea>
                   </label>
-                </div>
-
-                <!-- 単語登録フィールド -->
-                <div id="vocab-fields">
-                  <!-- 非表示：個別登録用（一括登録後の編集で使用） -->
-                  <input id="learning-item-title" type="hidden" />
-                  <input id="learning-item-meaning" type="hidden" />
-                  <input id="learning-item-pos" type="hidden" />
-                  <textarea id="learning-item-example" style="display:none"></textarea>
-                  <textarea id="learning-item-example-translation" style="display:none"></textarea>
-                  <input id="learning-item-tags" type="hidden" />
-
-                  <div class="vocab-import-flow stack">
-                    <div class="vocab-step">
-                      <p class="step-label">① 下のプロンプトをコピーして ChatGPT / Claude に貼り付ける</p>
-                      <div class="mini-actions">
-                        <button type="button" id="copy-vocab-prompt" class="soft-button">プロンプトをコピー</button>
-                      </div>
-                    </div>
-                    <div class="vocab-step">
-                      <p class="step-label">② プロンプト末尾に覚えたい単語を追記して送信する</p>
-                    </div>
-                    <div class="vocab-step">
-                      <p class="step-label">③ AI の出力結果をそのまま下欄に貼り付けて「一括登録」</p>
-                      <label>AI出力を貼り付け
-                        <textarea id="vocab-bulk-paste" rows="6" placeholder="poverty / 貧困 / 名詞 / Poverty affects millions of people worldwide. / 貧困は世界中の何百万人もの人々に影響を与えている。 / severe poverty, extreme poverty, poverty rate / 不可算名詞。live in poverty（貧困状態にある）の形でも使う。 / 社会問題・学術的文脈 / B2 / 社会・家庭"></textarea>
-                      </label>
-                      <div class="mini-actions">
-                        <button type="button" id="vocab-bulk-import">一括登録</button>
-                      </div>
-                    </div>
+                  <div class="mini-actions">
+                    <button type="button" id="vocab-bulk-import">一括登録</button>
                   </div>
                 </div>
+              </div>
+            </section>
 
-                <!-- 読解テキスト登録フィールド -->
-                <div id="reading-fields" style="display:none">
-                  <label>タイトル<input id="learning-item-title-reading" type="text" placeholder="教材名・章タイトルなど" /></label>
-                  <div class="pdf-import-row">
-                    <label class="pdf-label" for="pdf-file-input">PDFから読み込む</label>
-                    <input id="pdf-file-input" type="file" accept=".pdf" />
-                    <span id="pdf-status" class="muted" style="font-size:0.85em"></span>
-                  </div>
-                  <label>本文<textarea id="learning-item-content" rows="10" placeholder="テキストを貼り付け、またはPDFから読み込む"></textarea></label>
-                  <label>タグ<input id="learning-item-tags-reading" type="text" placeholder="教科書, Chapter1" /></label>
+            <!-- 互換用：非表示フォーム -->
+            <form id="learning-item-form" style="display:none">
+              <button type="button" id="new-learning-item">新規</button>
+              <button type="button" id="speak-learning-item">読み上げ</button>
+              <button type="button" id="delete-learning-item">削除</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- 文章登録タブ -->
+        <div id="tab-reading-materials" style="display:none">
+          <div class="register-page-layout">
+            <div class="mini-actions" style="margin-bottom: 1rem;">
+              <button type="button" class="soft-button" data-go="reading-list">📚 登録した文章を確認する</button>
+            </div>
+
+            <section class="card">
+              <h3>文章教材を登録（JSON貼り付け）</h3>
+              <p class="muted">ChatGPTで生成した読解教材JSONをそのまま貼り付けてください。</p>
+              <label>
+                JSON貼り付け
+                <textarea id="reading-material-json" rows="12" placeholder='{
+  "type": "reading_text",
+  "title": "教材タイトル",
+  "language": "en",
+  "level": "B1",
+  "originalText": "本文...",
+  ...
+}'></textarea>
+              </label>
+              <div class="mini-actions">
+                <button type="button" id="reading-material-import">登録</button>
+              </div>
+              <details style="margin-top:1.5rem">
+                <summary class="muted" style="cursor:pointer">ChatGPT用プロンプトを表示</summary>
+                <div class="chatgpt-prompt-box">
+                  <p class="muted" style="margin-bottom:0.5rem">以下をコピーして、ChatGPTに貼り付け後、末尾に文章を追加してください。</p>
+                  <button type="button" id="copy-reading-prompt" class="soft-button">プロンプトをコピー</button>
+                  <pre id="reading-prompt-text" style="display:none">以下の文章を、言語学習アプリの読解パートに登録できる教材JSONに変換してください。
+
+目的は、文章をただ読むだけではなく、以下の6ステップで学習できるようにすることです。
+1. 初読  2. 確認設問  3. 精読・語彙整理  4. 再読  5. 音読・シャドーイング  6. 1文アウトプット
+
+以下の条件に従って、必ずJSONのみを出力してください。説明文、前置き、Markdownのコードブロックは不要です。
+
+{
+  "type": "reading_text",
+  "title": "",
+  "language": "",
+  "level": "",
+  "domain": "",
+  "sourceNote": "ユーザー貼り付け教材",
+  "originalText": "",
+  "japaneseTranslation": "",
+  "firstReading": { "targetSeconds": 0, "instruction": "" },
+  "comprehensionQuestions": [{ "question": "", "choices": ["", "", ""], "answer": "", "explanation": "" }],
+  "intensiveReading": {
+    "vocabulary": [{ "word": "", "meaningJa": "", "partOfSpeech": "", "note": "" }],
+    "chunks": [{ "chunk": "", "meaningJa": "", "note": "" }],
+    "grammarPoints": [{ "title": "", "explanationJa": "", "example": "" }],
+    "notes": [""]
+  },
+  "rereading": { "targetSeconds": 0, "instruction": "" },
+  "oralPractice": { "instruction": "", "focusChunks": [""] },
+  "oneSentenceOutput": { "instruction": "", "recommendedExpressions": ["", ""] }
+}
+
+変換する文章：</pre>
                 </div>
-
-                <!-- 非表示の共通フィールド（保存時に使用） -->
-                <input id="learning-item-note" type="hidden" />
-
-                <div class="mini-actions">
-                  <button type="submit">登録</button>
-                  <button type="button" id="new-learning-item" class="soft-button">新規入力</button>
-                  <button type="button" id="speak-learning-item" class="soft-button">読み上げ</button>
-                  <button type="button" id="delete-learning-item" class="soft-button">削除</button>
-                </div>
-              </form>
+              </details>
             </section>
           </div>
         </div>
@@ -637,6 +652,52 @@
         </div>
       </section>
 
+      <!-- ══════════════════ VOCAB LIST PAGE ══════════════════ -->
+      <section class="page" id="page-vocab-list">
+        <div class="page-header">
+          <div><p class="eyebrow">Vocabulary</p><h2>登録済み単語一覧</h2></div>
+        </div>
+        <div class="filter-bar card">
+          <label>言語
+            <select id="vocab-list-language">
+              <option value="">すべて</option>
+              <option value="english">英語</option>
+              <option value="chinese">中国語</option>
+              <option value="other">その他</option>
+            </select>
+          </label>
+          <label class="grow">
+            <input id="vocab-list-query" type="text" placeholder="キーワードで単語を検索" />
+          </label>
+          <button type="button" id="vocab-list-search" class="soft-button">検索</button>
+        </div>
+        <section class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>単語</th><th>意味</th><th>言語</th><th>例文</th><th>操作</th></tr></thead>
+              <tbody id="vocab-list-body"><tr><td colspan="5">読み込み中...</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══════════════════ READING LIST PAGE ══════════════════ -->
+      <section class="page" id="page-reading-list">
+        <div class="page-header">
+          <div><p class="eyebrow">Reading Materials</p><h2>登録済み文章一覧</h2></div>
+          <button type="button" id="reading-list-refresh" class="soft-button">再読み込み</button>
+        </div>
+        <section class="card">
+          <p class="muted">「修了にする」を押した文章は、読解パートで選択されなくなります。</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>タイトル</th><th>言語</th><th>レベル</th><th>領域</th><th>操作</th></tr></thead>
+              <tbody id="reading-list-body"><tr><td colspan="5">読み込み中...</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
     </div><!-- /layout -->
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
@@ -661,6 +722,35 @@
         if (typeSelect) {
           typeSelect.addEventListener('change', updateItemFormView);
           updateItemFormView();
+        }
+
+        // タブ切り替え（単語登録 / 文章登録 / DB教材）
+        var TAB_PANELS = {
+          'my-items':          document.querySelector('#tab-my-items'),
+          'reading-materials': document.querySelector('#tab-reading-materials'),
+          'db-materials':      document.querySelector('#tab-db-materials')
+        };
+        document.querySelectorAll('.tab-button[data-tab]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-button[data-tab]').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            var tab = btn.dataset.tab;
+            Object.keys(TAB_PANELS).forEach(function(key) {
+              if (TAB_PANELS[key]) TAB_PANELS[key].style.display = key === tab ? '' : 'none';
+            });
+          });
+        });
+
+        // 読解プロンプトのコピー
+        var copyReadingBtn = document.querySelector('#copy-reading-prompt');
+        if (copyReadingBtn) {
+          copyReadingBtn.addEventListener('click', function() {
+            var text = document.querySelector('#reading-prompt-text')?.textContent || '';
+            navigator.clipboard.writeText(text.trim()).then(function() {
+              copyReadingBtn.textContent = 'コピーしました！';
+              setTimeout(function() { copyReadingBtn.textContent = 'プロンプトをコピー'; }, 2000);
+            });
+          });
         }
 
         // PDF import

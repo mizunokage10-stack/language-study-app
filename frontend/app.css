@@ -542,3 +542,39 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
 .vocab-import-flow { gap: 12px; }
 .vocab-step { display: flex; flex-direction: column; gap: 6px; }
 .step-label { font-size: 0.88em; color: var(--text-muted, #aaa); margin: 0; }
+
+/* ── Reading Step UI ── */
+.reading-step-ui { display: flex; flex-direction: column; gap: 14px; }
+.reading-substep-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.reading-substep-badge { font-size: 0.75em; padding: 3px 8px; border-radius: 12px; background: rgba(255,255,255,0.08); color: var(--text-muted, #aaa); white-space: nowrap; }
+.reading-substep-badge.active { background: var(--accent, #c471f5); color: #fff; font-weight: 700; }
+.reading-substep-badge.done { background: rgba(100,220,100,0.2); color: #8ef; }
+.reading-text { white-space: pre-wrap; line-height: 1.8; font-family: inherit; font-size: 1em; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin: 0; }
+.comprehension-choices { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.comprehension-choice { text-align: left; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05); color: inherit; cursor: pointer; }
+.comprehension-choice:hover:not(:disabled) { background: rgba(196,113,245,0.2); }
+.comprehension-choice.correct { border-color: #4cf07a; background: rgba(76,240,122,0.15); }
+.comprehension-choice.wrong { border-color: #f05c5c; background: rgba(240,92,92,0.15); }
+.reading-correct { color: #4cf07a; font-weight: 700; }
+.reading-wrong { color: #f05c5c; font-weight: 700; }
+.vocab-chips { display: flex; flex-direction: column; gap: 8px; }
+.vocab-chip { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 12px; }
+.chunk-list { display: flex; flex-direction: column; gap: 8px; }
+.chunk-item { display: flex; flex-direction: column; gap: 2px; }
+.chunk-item code { font-family: monospace; font-size: 0.95em; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; }
+.grammar-point { margin-bottom: 10px; }
+.focus-chunks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.focus-chunks code { font-family: monospace; font-size: 0.88em; background: rgba(196,113,245,0.2); padding: 2px 8px; border-radius: 10px; }
+.chatgpt-prompt-box { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-top: 8px; }
+
+/* ── Course lang select ── */
+.course-lang-select-row { display: flex; align-items: center; justify-content: center; padding: 8px 0; }
+.course-lang-label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 1em; }
+.course-lang-select { font-size: 1.1em; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: inherit; }
+
+/* ── Register page layout ── */
+.register-page-layout { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Completed badge ── */
+.completed-badge { font-size: 0.7em; background: rgba(100,200,100,0.25); color: #8ef; border-radius: 8px; padding: 1px 7px; margin-left: 4px; }
+.reading-material-completed td { opacity: 0.55; }

@@ -37,6 +37,7 @@ const state = {
   courseTimerId: null,
   dbVocabulary: [],
   dbReadingMaterials: [],
+  localReadingMaterials: [],
   vocabQuiz: { queue: [], index: 0, mode: "meaning", phase: "input" },
   courseFilters: { language: "english", cefrLevel: "A1", domain: "", duration: "" },
   ttsVoices: [],
@@ -54,7 +55,8 @@ const localStoreKeys = {
   learningSessions: "language-study.learningSessions",
   studyLogs: "language-study.studyLogs",
   notebookItems: "language-study.notebookItems",
-  historyItems: "language-study.historyItems"
+  historyItems: "language-study.historyItems",
+  readingMaterials: "language-study.readingMaterials"
 };
 
 const elements = {
@@ -190,18 +192,24 @@ const elements = {
   authUserEmail: document.querySelector("#auth-user-email")
 };
 
+// 学習コース別パート時間設定（分）
+const COURSE_PART_MINUTES = {
+  "course-30":  { vocab: 8,  listening: 7,  reading: 10, writing: 5  },
+  "course-60":  { vocab: 15, listening: 15, reading: 20, writing: 10 },
+  "course-90":  { vocab: 20, listening: 20, reading: 35, writing: 15 }
+};
+
 const coursePresets = [
   {
     id: "course-30",
     name: "30分コース",
     totalMinutes: 30,
-    description: "忙しい日でも最低限",
+    description: "忙しい日でも最低限の学習",
     steps: [
-      { id: "vocab-5", title: "単語学習", type: "vocab-quiz", minutes: 5, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
-      { id: "listening-7", title: "リスニング", type: "listening", minutes: 7, instructions: "登録済みのlisteningまたはsentenceを聞く練習です。" },
-      { id: "recording-5", title: "音読", type: "recording", minutes: 5, instructions: "例文や本文を声に出して読みます。録音機能は今後接続します。" },
-      { id: "reading-8", title: "読解・例文確認", type: "reading", minutes: 8, instructions: "登録済みの例文や本文を読み、意味と構造を確認します。" },
-      { id: "writing-5", title: "ミニ作文・学習ログ", type: "writing", minutes: 5, instructions: "短い作文を書き、今日の気づきを残します。" }
+      { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-30"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
+      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-30"].listening, instructions: "BBC Learning Englishでリスニング練習を行います。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-30"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
   {
@@ -210,12 +218,10 @@ const coursePresets = [
     totalMinutes: 60,
     description: "標準バランス学習",
     steps: [
-      { id: "vocab-10", title: "単語学習", type: "vocab-quiz", minutes: 10, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
-      { id: "dictation-10", title: "ディクテーション", type: "dictation", minutes: 10, instructions: "聞き取った内容を書き取る練習です。音声機能は今後接続します。" },
-      { id: "recording-10", title: "音読・録音", type: "recording", minutes: 10, instructions: "本文や例文を音読します。録音機能は今後接続します。" },
-      { id: "grammar-15", title: "読解・文法確認", type: "grammar", minutes: 15, instructions: "登録済みの文法・例文を確認します。" },
-      { id: "writing-10", title: "作文・要約", type: "writing", minutes: 10, instructions: "短い作文または要約を書きます。" },
-      { id: "log-5", title: "学習ログ", type: "log", minutes: 5, instructions: "今日の学習メモを整理します。" }
+      { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-60"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
+      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-60"].listening, instructions: "BBC Learning Englishでリスニング練習を行います。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-60"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
   {
@@ -224,28 +230,10 @@ const coursePresets = [
     totalMinutes: 90,
     description: "しっかり集中学習",
     steps: [
-      { id: "vocab-15", title: "単語学習", type: "vocab-quiz", minutes: 15, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
-      { id: "grammar-15", title: "精読・文法分析", type: "grammar", minutes: 15, instructions: "文法や例文の構造を分析します。" },
-      { id: "dictation-10", title: "ディクテーション", type: "dictation", minutes: 10, instructions: "聞き取った内容を書き取る練習です。" },
-      { id: "shadowing-15", title: "リスニング・シャドーイング", type: "shadowing", minutes: 15, instructions: "登録済みのlisteningまたはsentenceでシャドーイングします。" },
-      { id: "recording-10", title: "音読録音", type: "recording", minutes: 10, instructions: "音読して発音や流れを確認します。録音機能は今後接続します。" },
-      { id: "writing-15", title: "作文・要約", type: "writing", minutes: 15, instructions: "学習内容を使って作文または要約を書きます。" },
-      { id: "log-10", title: "添削プロンプト生成・学習ログ", type: "log", minutes: 10, instructions: "添削に出したい内容や今日の学習ログを整理します。" }
-    ]
-  },
-  {
-    id: "course-120",
-    name: "120分コース",
-    totalMinutes: 120,
-    description: "週末の集中学習向け",
-    steps: [
-      { id: "vocab-20", title: "単語学習", type: "vocab-quiz", minutes: 20, instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
-      { id: "vocabulary-20", title: "語彙学習", type: "reading", minutes: 20, instructions: "新しい語彙を文脈と一緒に確認します。" },
-      { id: "grammar-20", title: "精読・文法分析", type: "grammar", minutes: 20, instructions: "文法や例文の構造を分析します。" },
-      { id: "dictation-15", title: "ディクテーション", type: "dictation", minutes: 15, instructions: "聞き取った内容を書き取る練習です。" },
-      { id: "shadowing-15", title: "シャドーイング", type: "shadowing", minutes: 15, instructions: "お手本に合わせて発話練習します。" },
-      { id: "writing-20", title: "作文", type: "writing", minutes: 20, instructions: "学習内容を使って作文または要約を書きます。" },
-      { id: "log-10b", title: "学習ログ", type: "log", minutes: 10, instructions: "添削に出したい内容や今日の学習ログを整理します。" }
+      { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-90"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
+      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-90"].listening, instructions: "BBC Learning Englishでリスニング練習を行います。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-90"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   }
 ];
@@ -387,7 +375,10 @@ function setBusy(nextBusy) {
 }
 
 function shouldUseLocalStorageBackend() {
-  return !["localhost", "127.0.0.1", ""].includes(window.location.hostname);
+  const hostname = window.location.hostname;
+  const port = window.location.port;
+  // Vercel（localhost以外）またはstatic mockupサーバー（port 3333）ではlocalStorageを使用
+  return !["localhost", "127.0.0.1", ""].includes(hostname) || port === "3333";
 }
 
 function createLocalId() {
@@ -1533,7 +1524,8 @@ function switchPage(pageId) {
   const innerTitle  = document.getElementById("inner-page-title");
   if (innerTopbar) {
     const pageTitles = {
-      course: "学習タイマー", "learning-items": "学習アイテム登録",
+      course: "学習タイマー", "learning-items": "単語登録 / 文章登録",
+      "vocab-list": "登録済み単語一覧", "reading-list": "登録済み文章一覧",
       audio: "音声練習", dictation: "ディクテーション",
       recording: "音読録音", notebook: "単語帳",
       history: "学習履歴", review: "SRS復習",
@@ -1547,7 +1539,15 @@ function switchPage(pageId) {
   }
 
   if (pageId === "learning-items") {
-    loadLearningItems();
+    // 登録フォームページ: テーブルは不要
+  }
+
+  if (pageId === "vocab-list") {
+    loadVocabListPage();
+  }
+
+  if (pageId === "reading-list") {
+    loadReadingListPage();
   }
 
   if (pageId === "notebook") {
@@ -1561,7 +1561,6 @@ function switchPage(pageId) {
   if (pageId === "course") {
     renderCoursePresetList();
     loadLearningItems();
-    loadCourseDomains();
   }
 
   if (pageId === "audio") {
@@ -1990,6 +1989,56 @@ async function handleLocalJson(url, options = {}) {
     }
   }
 
+  if (path === "/api/reading-materials" && method === "GET") {
+    const items = readLocalCollection(localStoreKeys.readingMaterials);
+    return localJsonResponse({ items: sortByCreatedAtDesc(items) });
+  }
+
+  if (path === "/api/reading-materials" && method === "POST") {
+    const items = readLocalCollection(localStoreKeys.readingMaterials);
+    const timestamp = new Date().toISOString();
+    const item = {
+      id: body.id || createLocalId(),
+      type: body.type || "reading_text",
+      title: body.title || "",
+      language: body.language || "en",
+      level: body.level || "",
+      domain: body.domain || "",
+      sourceNote: body.sourceNote || "",
+      originalText: body.originalText || "",
+      japaneseTranslation: body.japaneseTranslation || "",
+      firstReading: body.firstReading || { targetSeconds: 90, instruction: "辞書を使わず、止まらずに読んでください。" },
+      comprehensionQuestions: Array.isArray(body.comprehensionQuestions) ? body.comprehensionQuestions : [],
+      intensiveReading: body.intensiveReading || { vocabulary: [], chunks: [], grammarPoints: [], notes: [] },
+      rereading: body.rereading || { targetSeconds: 60, instruction: "初読より少し速く読むことを目標にしてください。" },
+      oralPractice: body.oralPractice || { instruction: "", focusChunks: [] },
+      oneSentenceOutput: body.oneSentenceOutput || { instruction: "", recommendedExpressions: [] },
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    items.unshift(item);
+    writeLocalCollection(localStoreKeys.readingMaterials, items);
+    return localJsonResponse({ item });
+  }
+
+  if (path.startsWith("/api/reading-materials/")) {
+    const id = decodeURIComponent(path.split("/").pop());
+    const items = readLocalCollection(localStoreKeys.readingMaterials);
+    const index = items.findIndex((item) => item.id === id);
+
+    if (method === "PATCH" && index !== -1) {
+      items[index] = { ...items[index], ...body, updatedAt: new Date().toISOString() };
+      writeLocalCollection(localStoreKeys.readingMaterials, items);
+      return localJsonResponse({ item: items[index] });
+    }
+
+    if (method === "DELETE" && index !== -1) {
+      items.splice(index, 1);
+      writeLocalCollection(localStoreKeys.readingMaterials, items);
+      return localJsonResponse({ ok: true });
+    }
+  }
+
   if (path === "/api/history" && method === "GET") {
     const items = readLocalCollection(localStoreKeys.historyItems);
     return localJsonResponse({ items: sortByCreatedAtDesc(items) });
@@ -2024,17 +2073,14 @@ async function handleLocalJson(url, options = {}) {
 
 function learningItemQueryParams() {
   const params = new URLSearchParams();
-  if (elements.learningItemTypeFilter.value) {
-    params.set("type", elements.learningItemTypeFilter.value);
-  }
-  if (elements.learningItemLanguageFilter.value) {
-    params.set("language", elements.learningItemLanguageFilter.value);
-  }
-  if (elements.learningItemQuery.value.trim()) {
-    params.set("query", elements.learningItemQuery.value.trim());
-  }
-  const query = params.toString();
-  return query ? `?${query}` : "";
+  const typeFilter = elements.learningItemTypeFilter?.value || "";
+  const langFilter = elements.learningItemLanguageFilter?.value || "";
+  const query = elements.learningItemQuery?.value?.trim() || "";
+  if (typeFilter) params.set("type", typeFilter);
+  if (langFilter) params.set("language", langFilter);
+  if (query) params.set("query", query);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
 }
 
 function getLearningItemFilters() {
@@ -2091,6 +2137,7 @@ async function loadRecordingPractice() {
 }
 
 function renderLearningItemTable() {
+  if (!elements.learningItemTableBody) return;
   if (state.learningItems.length === 0) {
     elements.learningItemTableBody.innerHTML = `
       <tr>
@@ -2392,6 +2439,10 @@ function createCourseRun(course) {
     listeningHeard: "",
     listeningExpressions: "",
     listeningDifficult: "",
+    readingSubStep: 0,
+    readingMaterial: null,
+    readingComprehensionAnswer: null,
+    readingOutputText: "",
     startedAt: new Date().toISOString(),
     stepStartedAt: new Date().toISOString(),
     stepEndsAt: null
@@ -2487,6 +2538,9 @@ function syncCourseTextInputs() {
   if (heardInput) state.courseRun.listeningHeard = heardInput.value;
   if (expressionsInput) state.courseRun.listeningExpressions = expressionsInput.value;
   if (difficultInput) state.courseRun.listeningDifficult = difficultInput.value;
+
+  const readingOutputInput = document.querySelector("#course-reading-output");
+  if (readingOutputInput) state.courseRun.readingOutputText = readingOutputInput.value;
 }
 
 function advanceCourseStep() {
@@ -2817,6 +2871,259 @@ async function importDbVocabAsLearningItem(vocab) {
   setStatus(`「${payload.title}」を学習アイテムに追加しました。`);
 }
 
+async function loadLocalReadingMaterials() {
+  try {
+    const data = await fetchJson("/api/reading-materials");
+    state.localReadingMaterials = data.items || [];
+  } catch (_) {
+    state.localReadingMaterials = [];
+  }
+}
+
+function selectReadingMaterial() {
+  return state.localReadingMaterials.find((m) => !m.completed) || null;
+}
+
+const READING_SUB_STEPS = [
+  { key: "firstReading",       label: "① 初読",               description: "辞書を使わず、止まらずに読みましょう。完璧に理解しようとせず、全体の流れを掴むことを目標にしましょう。" },
+  { key: "comprehension",      label: "② 確認設問",           description: "初読でどれくらい意味を掴めたか確認します。" },
+  { key: "intensiveReading",   label: "③ 精読・語彙整理",     description: "語彙・文法・構文を確認します。ここでは止まって確認してください。" },
+  { key: "rereading",          label: "④ 再読",               description: "今度は初読より少し速く読むことを目標にしましょう。意味をかたまりで処理することを意識してください。" },
+  { key: "oralPractice",       label: "⑤ 音読・シャドーイング", description: "本文を見ながら声に出して読んでください。余裕があればシャドーイングも行いましょう。" },
+  { key: "oneSentenceOutput",  label: "⑥ 1文アウトプット",    description: "本文で使われていた表現を1つ選び、自分の生活や考えに置き換えて1文書いてください。" }
+];
+
+function renderReadingCourseStep(container) {
+  const run = state.courseRun;
+  if (!run) return;
+
+  if (!run.readingMaterial) {
+    run.readingMaterial = selectReadingMaterial();
+  }
+
+  const mat = run.readingMaterial;
+  const subStep = run.readingSubStep;
+  const stepInfo = READING_SUB_STEPS[subStep];
+
+  if (!mat) {
+    container.innerHTML = `
+      <div class="reading-step-ui">
+        <p class="muted">読解教材が登録されていません。</p>
+        <p>「単語登録 / 文章登録」ページの「文章登録」タブからChatGPT出力JSONを貼り付けて登録してください。</p>
+      </div>
+    `;
+    run.renderedStepIndex = run.currentStepIndex;
+    return;
+  }
+
+  const subStepNav = `
+    <div class="reading-substep-nav">
+      ${READING_SUB_STEPS.map((s, i) => `<span class="reading-substep-badge ${i === subStep ? "active" : i < subStep ? "done" : ""}">${s.label}</span>`).join("")}
+    </div>
+  `;
+
+  let content = "";
+
+  if (subStep === 0) {
+    const inst = mat.firstReading?.instruction || stepInfo.description;
+    const target = mat.firstReading?.targetSeconds || 90;
+    content = `
+      <section class="section-card">
+        <h4>${stepInfo.label}</h4>
+        <p>${escapeHtml(inst)}</p>
+        <p class="muted">目標時間：${Math.ceil(target / 60)}分程度</p>
+      </section>
+      <section class="section-card">
+        <h4>本文</h4>
+        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
+      </section>
+      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 確認設問へ</button></div>
+    `;
+  } else if (subStep === 1) {
+    const questions = mat.comprehensionQuestions || [];
+    if (!questions.length) {
+      content = `
+        <section class="section-card">
+          <h4>${stepInfo.label}</h4>
+          <p class="muted">確認設問が登録されていません。</p>
+        </section>
+        <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">精読・語彙整理へ</button></div>
+      `;
+    } else {
+      const q = questions[0];
+      const answered = run.readingComprehensionAnswer;
+      content = `
+        <section class="section-card">
+          <h4>${stepInfo.label}</h4>
+          <p>${escapeHtml(q.question || "")}</p>
+          <div class="comprehension-choices">
+            ${(q.choices || []).map((choice) => `
+              <button type="button" class="comprehension-choice ${answered === choice ? (choice === q.answer ? "correct" : "wrong") : ""}" data-choice="${escapeHtml(choice)}" ${answered ? "disabled" : ""}>
+                ${escapeHtml(choice)}
+              </button>
+            `).join("")}
+          </div>
+          ${answered ? `
+            <p class="${answered === q.answer ? "reading-correct" : "reading-wrong"}">
+              ${answered === q.answer ? "✓ 正解" : `✗ 不正解（正解：${escapeHtml(q.answer || "")}）`}
+            </p>
+            ${q.explanation ? `<p class="muted">${escapeHtml(q.explanation)}</p>` : ""}
+          ` : ""}
+        </section>
+        ${answered ? `<div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">精読・語彙整理へ</button></div>` : ""}
+      `;
+    }
+  } else if (subStep === 2) {
+    const ir = mat.intensiveReading || {};
+    content = `
+      <section class="section-card">
+        <h4>${stepInfo.label}</h4>
+      </section>
+      <section class="section-card">
+        <h4>本文</h4>
+        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
+      </section>
+      <section class="section-card">
+        <h4>日本語訳</h4>
+        <p>${escapeHtml(mat.japaneseTranslation || "")}</p>
+      </section>
+      ${ir.vocabulary?.length ? `
+        <section class="section-card">
+          <h4>重要語彙</h4>
+          <div class="vocab-chips">
+            ${ir.vocabulary.map((v) => `
+              <div class="vocab-chip">
+                <strong>${escapeHtml(v.word || "")}</strong>
+                <span class="muted">（${escapeHtml(v.partOfSpeech || "")}）</span>
+                <span>${escapeHtml(v.meaningJa || "")}</span>
+                ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      ` : ""}
+      ${ir.chunks?.length ? `
+        <section class="section-card">
+          <h4>チャンク・フレーズ</h4>
+          <div class="chunk-list">
+            ${ir.chunks.map((c) => `
+              <div class="chunk-item">
+                <code>${escapeHtml(c.chunk || "")}</code>
+                <span>→ ${escapeHtml(c.meaningJa || "")}</span>
+                ${c.note ? `<p class="muted">${escapeHtml(c.note)}</p>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      ` : ""}
+      ${ir.grammarPoints?.length ? `
+        <section class="section-card">
+          <h4>文法ポイント</h4>
+          ${ir.grammarPoints.map((g) => `
+            <div class="grammar-point">
+              <strong>${escapeHtml(g.title || "")}</strong>
+              <p>${escapeHtml(g.explanationJa || "")}</p>
+              ${g.example ? `<p class="muted">${escapeHtml(g.example)}</p>` : ""}
+            </div>
+          `).join("")}
+        </section>
+      ` : ""}
+      ${ir.notes?.length ? `
+        <section class="section-card">
+          <h4>補足メモ</h4>
+          <ul>${ir.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>
+        </section>
+      ` : ""}
+      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">再読へ</button></div>
+    `;
+  } else if (subStep === 3) {
+    const target = mat.rereading?.targetSeconds || 60;
+    const inst = mat.rereading?.instruction || stepInfo.description;
+    content = `
+      <section class="section-card">
+        <h4>${stepInfo.label}</h4>
+        <p>${escapeHtml(inst)}</p>
+        <p class="muted">目標時間：初読より速く（約${Math.ceil(target / 60)}分程度）</p>
+      </section>
+      <section class="section-card">
+        <h4>本文</h4>
+        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
+      </section>
+      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 音読へ</button></div>
+    `;
+  } else if (subStep === 4) {
+    const oral = mat.oralPractice || {};
+    const inst = oral.instruction || stepInfo.description;
+    const focuses = oral.focusChunks || [];
+    content = `
+      <section class="section-card">
+        <h4>${stepInfo.label}</h4>
+        <p>${escapeHtml(inst)}</p>
+        ${focuses.length ? `
+          <p class="muted">特に意識するチャンク：</p>
+          <div class="focus-chunks">${focuses.map((c) => `<code>${escapeHtml(c)}</code>`).join("")}</div>
+        ` : ""}
+      </section>
+      <section class="section-card">
+        <h4>本文</h4>
+        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
+        <div class="mini-actions" style="margin-top:0.75rem">
+          <button type="button" id="reading-tts-play" class="soft-button">▶ 読み上げ</button>
+        </div>
+      </section>
+      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">音読完了 → 1文アウトプットへ</button></div>
+    `;
+  } else if (subStep === 5) {
+    const out = mat.oneSentenceOutput || {};
+    const inst = out.instruction || stepInfo.description;
+    const exprs = out.recommendedExpressions || [];
+    content = `
+      <section class="section-card">
+        <h4>${stepInfo.label}</h4>
+        <p>${escapeHtml(inst)}</p>
+        ${exprs.length ? `
+          <p class="muted">使える表現：</p>
+          <div class="focus-chunks">${exprs.map((e) => `<code>${escapeHtml(e)}</code>`).join("")}</div>
+        ` : ""}
+      </section>
+      <label>
+        1文アウトプット
+        <textarea id="course-reading-output" rows="4" placeholder="本文の表現を使って1文書いてください...">${escapeHtml(run.readingOutputText || "")}</textarea>
+      </label>
+    `;
+  }
+
+  container.innerHTML = `
+    <div class="reading-step-ui">
+      <p class="eyebrow">${escapeHtml(mat.title || "読解教材")} ${mat.level ? `/ ${escapeHtml(mat.level)}` : ""}</p>
+      ${subStepNav}
+      ${content}
+    </div>
+  `;
+
+  container.querySelector("#reading-substep-next")?.addEventListener("click", () => {
+    syncCourseTextInputs();
+    run.readingSubStep = Math.min(run.readingSubStep + 1, 5);
+    renderReadingCourseStep(container);
+  });
+
+  container.querySelectorAll(".comprehension-choice").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      run.readingComprehensionAnswer = btn.dataset.choice;
+      renderReadingCourseStep(container);
+    });
+  });
+
+  container.querySelector("#reading-tts-play")?.addEventListener("click", () => {
+    const lang = mat.language === "zh" ? "zh-TW" : "en-US";
+    speakText(mat.originalText || "", { language: lang });
+  });
+
+  container.querySelector("#course-reading-output")?.addEventListener("input", syncCourseTextInputs);
+
+  run.renderedStepIndex = run.currentStepIndex;
+}
+
 function renderCourseItemCard(item) {
   const sub = item.meaning || item.exampleTranslation || item.content || "";
   const example = item.example || "";
@@ -2903,36 +3210,14 @@ function renderCourseStepUi(step) {
     return;
   }
 
-  if (step.type === "reading" || step.type === "grammar") {
-    const dbItems = state.dbReadingMaterials.slice(0, 3);
-    const localItems = state.learningItems
-      .filter((item) => ["grammar", "sentence", "listening"].includes(item.type))
-      .slice(0, 3);
-
-    const dbSection = dbItems.length
-      ? `<section class="section-card"><h4>DB教材</h4>${dbItems
-          .map(
-            (m) => `
-            <div>
-              <strong>${escapeHtml(m.title || "")}</strong>
-              ${m.cefr_level ? `<span class="eyebrow"> ${escapeHtml(m.cefr_level)}</span>` : ""}
-              <p class="muted">${escapeHtml(m.content || m.body || "")}</p>
-            </div>`
-          )
-          .join("")}</section>`
-      : "";
-
-    const localSection = localItems.length
-      ? `<div class="course-step-ui-grid">${localItems
-          .map((item) => renderCourseItemCard(item))
-          .join("")}</div>`
-      : "";
-
-    elements.courseStepUi.innerHTML =
-      dbSection || localSection
-        ? dbSection + localSection
-        : "<p>登録済みのLearningItemから文法・例文・リスニング項目を確認してください。</p>";
-    run.renderedStepIndex = run.currentStepIndex;
+  if (step.type === "reading") {
+    run.readingSubStep = 0;
+    run.readingComprehensionAnswer = null;
+    run.renderedStepIndex = run.currentStepIndex; // タイマーループの重複呼び出しを防ぐ
+    loadLocalReadingMaterials().then(() => {
+      if (!run.readingMaterial) run.readingMaterial = selectReadingMaterial();
+      renderReadingCourseStep(elements.courseStepUi);
+    });
     return;
   }
 
@@ -2975,6 +3260,8 @@ function courseSessionPayload() {
     writingText: run.writingText,
     feedbackText: "",
     note: run.note,
+    readingOutputText: run.readingOutputText,
+    readingMaterialTitle: run.readingMaterial?.title || "",
     listeningHeard: run.listeningHeard,
     listeningExpressions: run.listeningExpressions,
     listeningDifficult: run.listeningDifficult
@@ -2999,6 +3286,8 @@ function renderCourseSummary() {
       <div class="course-summary-item"><span>録音回数</span><strong>${escapeHtml(String(payload.recordingCount))}</strong></div>
     </div>
     <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
+    ${payload.readingMaterialTitle ? `<article class="section-card"><h4>読解教材</h4><p>${escapeHtml(payload.readingMaterialTitle)}</p></article>` : ""}
+    ${payload.readingOutputText ? `<article class="section-card"><h4>1文アウトプット</h4><p>${escapeHtml(payload.readingOutputText)}</p></article>` : ""}
     <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>
     <article class="section-card"><h4>今日のメモ</h4><p>${escapeHtml(payload.note || "未入力")}</p></article>
     ${payload.listeningHeard || payload.listeningExpressions || payload.listeningDifficult ? `
@@ -3698,6 +3987,7 @@ elements.homeButtons.forEach((button) => {
   button.addEventListener("click", () => switchPage(button.dataset.go));
 });
 
+
 // Home course-time buttons (30 / 60 / 90 min)
 document.querySelectorAll(".course-time-btn").forEach((button) => {
   button.addEventListener("click", () => {
@@ -3728,7 +4018,11 @@ function updateHomeStreak() {
 const origLoadHistory = typeof loadHistory === "function" ? loadHistory : null;
 document.addEventListener("historyLoaded", updateHomeStreak);
 
-elements.learningItemSearch.addEventListener("click", loadLearningItems);
+elements.learningItemSearch?.addEventListener("click", loadLearningItems);
+document.querySelector("#vocab-list-search")?.addEventListener("click", loadVocabListPage);
+document.querySelector("#vocab-list-query")?.addEventListener("keydown", (e) => { if (e.key === "Enter") loadVocabListPage(); });
+document.querySelector("#vocab-list-language")?.addEventListener("change", loadVocabListPage);
+document.querySelector("#reading-list-refresh")?.addEventListener("click", loadReadingListPage);
 elements.learningItemType.addEventListener("change", updateLearningItemFormVisibility);
 updateLearningItemFormVisibility();
 
@@ -3858,11 +4152,221 @@ elements.vocabBulkImport.addEventListener("click", async () => {
       await createInitialSrsData(data.item.id);
     }
     elements.vocabBulkPaste.value = "";
-    elements.vocabBulkWords.value = "";
     await loadLearningItems();
     setStatus(`${items.length}件の単語を一括登録しました。`);
   }, "単語を一括登録しています...");
 });
+
+// 文章登録 JSON 貼り付け
+document.querySelector("#reading-material-import")?.addEventListener("click", async () => {
+  const raw = (document.querySelector("#reading-material-json")?.value || "").trim();
+  if (!raw) { setStatus("JSONを貼り付けてください。"); return; }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (_) {
+    setStatus("JSONの形式が正しくありません。確認してください。", true);
+    return;
+  }
+
+  if (!parsed.originalText && !parsed.title) {
+    setStatus("originalTextまたはtitleが含まれていません。", true);
+    return;
+  }
+
+  await withBusy(async () => {
+    const data = await fetchJson("/api/reading-materials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed)
+    });
+    document.querySelector("#reading-material-json").value = "";
+    await loadReadingMaterialsList();
+    setStatus(`「${data.item.title || "文章教材"}」を登録しました。`);
+  }, "文章教材を登録しています...");
+});
+
+async function loadReadingMaterialsList() {
+  const listEl = document.querySelector("#reading-materials-list");
+  if (!listEl) return;
+  try {
+    const data = await fetchJson("/api/reading-materials");
+    const items = data.items || [];
+    state.localReadingMaterials = items;
+    if (!items.length) {
+      listEl.innerHTML = "<tr><td colspan='4'>登録された文章教材はまだありません。</td></tr>";
+      return;
+    }
+    listEl.innerHTML = items.map((item) => `
+      <tr class="${item.completed ? "reading-material-completed" : ""}">
+        <td>
+          <strong>${escapeHtml(item.title || "")}</strong>
+          ${item.completed ? ' <span class="completed-badge">修了</span>' : ""}
+        </td>
+        <td>${escapeHtml(item.language || "")}</td>
+        <td>${escapeHtml(item.level || "")}</td>
+        <td>
+          <div class="table-actions">
+            <button type="button" class="soft-button reading-material-toggle-complete" data-id="${escapeHtml(item.id)}" data-completed="${item.completed ? "1" : "0"}">
+              ${item.completed ? "修了解除" : "修了にする"}
+            </button>
+            <button type="button" class="soft-button reading-material-delete" data-id="${escapeHtml(item.id)}">削除</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+    listEl.querySelectorAll(".reading-material-toggle-complete").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const nowCompleted = btn.dataset.completed === "1";
+        await withBusy(async () => {
+          await fetchJson(`/api/reading-materials/${btn.dataset.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ completed: !nowCompleted })
+          });
+          await loadReadingMaterialsList();
+          setStatus(nowCompleted ? "修了を解除しました。" : "修了にしました。次回の読解パートでは選択されません。");
+        }, "更新しています...");
+      });
+    });
+
+    listEl.querySelectorAll(".reading-material-delete").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await withBusy(async () => {
+          await fetchJson(`/api/reading-materials/${btn.dataset.id}`, { method: "DELETE" });
+          await loadReadingMaterialsList();
+          setStatus("文章教材を削除しました。");
+        }, "削除しています...");
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = `<tr><td colspan='4'>${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+// ---- 単語一覧ページ ----------------------------------------------------------
+
+async function loadVocabListPage() {
+  const listEl = document.querySelector("#vocab-list-body");
+  if (!listEl) return;
+
+  const query = (document.querySelector("#vocab-list-query")?.value || "").toLowerCase();
+  const language = document.querySelector("#vocab-list-language")?.value || "";
+
+  try {
+    const data = await learningItemsRepository.getLearningItems();
+    const items = (data.items || []).filter((item) => {
+      if (item.type !== "vocabulary") return false;
+      if (language && item.language !== language) return false;
+      if (query) {
+        const haystack = [item.title, item.meaning, item.example, item.note].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+
+    if (!items.length) {
+      listEl.innerHTML = `<tr><td colspan="5">登録済みの単語はまだありません。</td></tr>`;
+      return;
+    }
+
+    listEl.innerHTML = items.map((item) => `
+      <tr>
+        <td><strong>${escapeHtml(item.title || "")}</strong></td>
+        <td>${escapeHtml(item.meaning || "")}</td>
+        <td>${escapeHtml(languageLabel(item.language))}</td>
+        <td>${escapeHtml(item.example || "")}</td>
+        <td>
+          <div class="table-actions">
+            <button type="button" class="soft-button vocab-list-speak" data-id="${escapeHtml(item.id)}">読み上げ</button>
+            <button type="button" class="soft-button vocab-list-delete" data-id="${escapeHtml(item.id)}">削除</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+
+    listEl.querySelectorAll(".vocab-list-speak").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = items.find((i) => i.id === btn.dataset.id);
+        if (item) speakLearningItem(item);
+      });
+    });
+    listEl.querySelectorAll(".vocab-list-delete").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await deleteLearningItem(btn.dataset.id);
+        await loadVocabListPage();
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = `<tr><td colspan="5">${escapeHtml(err.message || "読み込みに失敗しました。")}</td></tr>`;
+  }
+}
+
+// ---- 文章一覧ページ ----------------------------------------------------------
+
+async function loadReadingListPage() {
+  const listEl = document.querySelector("#reading-list-body");
+  if (!listEl) return;
+
+  try {
+    const data = await fetchJson("/api/reading-materials");
+    const items = data.items || [];
+    state.localReadingMaterials = items;
+
+    if (!items.length) {
+      listEl.innerHTML = `<tr><td colspan="5">登録済みの文章はまだありません。</td></tr>`;
+      return;
+    }
+
+    listEl.innerHTML = items.map((item) => `
+      <tr class="${item.completed ? "reading-material-completed" : ""}">
+        <td>
+          <strong>${escapeHtml(item.title || "")}</strong>
+          ${item.completed ? ' <span class="completed-badge">修了</span>' : ""}
+        </td>
+        <td>${escapeHtml(item.language || "")}</td>
+        <td>${escapeHtml(item.level || "")}</td>
+        <td>${escapeHtml(item.domain || "")}</td>
+        <td>
+          <div class="table-actions">
+            <button type="button" class="soft-button reading-list-toggle" data-id="${escapeHtml(item.id)}" data-completed="${item.completed ? "1" : "0"}">
+              ${item.completed ? "修了解除" : "修了にする"}
+            </button>
+            <button type="button" class="soft-button reading-list-delete" data-id="${escapeHtml(item.id)}">削除</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+
+    listEl.querySelectorAll(".reading-list-toggle").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const nowCompleted = btn.dataset.completed === "1";
+        await withBusy(async () => {
+          await fetchJson(`/api/reading-materials/${btn.dataset.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ completed: !nowCompleted })
+          });
+          await loadReadingListPage();
+          setStatus(nowCompleted ? "修了を解除しました。" : "修了にしました。読解パートでは選択されません。");
+        }, "更新しています...");
+      });
+    });
+
+    listEl.querySelectorAll(".reading-list-delete").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await withBusy(async () => {
+          await fetchJson(`/api/reading-materials/${btn.dataset.id}`, { method: "DELETE" });
+          await loadReadingListPage();
+          setStatus("文章教材を削除しました。");
+        }, "削除しています...");
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = `<tr><td colspan="5">${escapeHtml(err.message || "読み込みに失敗しました。")}</td></tr>`;
+  }
+}
 
 elements.learningItemForm.addEventListener("submit", saveLearningItem);
 elements.newLearningItem.addEventListener("click", resetLearningItemForm);
@@ -3910,7 +4414,10 @@ elements.coursePresetList.addEventListener("click", (event) => {
   }
 });
 
-elements.courseFilterApply?.addEventListener("click", loadCourseMaterials);
+elements.courseFilterLanguage?.addEventListener("change", () => {
+  state.courseFilters.language = elements.courseFilterLanguage.value;
+  renderCoursePresetList();
+});
 
 elements.courseConfirmBack.addEventListener("click", resetCourseToSelect);
 elements.courseStart.addEventListener("click", startCourse);
@@ -4009,16 +4516,7 @@ elements.studyLogTableBody.addEventListener("click", async (event) => {
 
 elements.loadReviewCard?.addEventListener("click", loadReviewItems);
 
-// DB教材タブ
-document.querySelectorAll(".tab-button[data-tab]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-button[data-tab]").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    const tab = btn.dataset.tab;
-    document.getElementById("tab-my-items").style.display = tab === "my-items" ? "" : "none";
-    document.getElementById("tab-db-materials").style.display = tab === "db-materials" ? "" : "none";
-  });
-});
+// タブ切り替えは index.html の DOMContentLoaded で処理
 document.querySelector("#db-materials-search")?.addEventListener("click", loadDbMaterialsTab);
 elements.revealReviewAnswer.addEventListener("click", revealReviewAnswer);
 elements.reviewAnswerArea.addEventListener("click", (event) => {
