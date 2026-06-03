@@ -1,6 +1,17 @@
 import { supabase } from "./supabase-client.js";
 import { createRepositories } from "./repositories.js";
 
+// BBC Learning English 外部教材設定
+const BBC_LISTENING_CONFIG = {
+  url: "https://www.bbc.co.uk/learningenglish/",
+  label: "BBC Learning Englishを開く",
+  guideByLevel: {
+    easy: "A1〜A2の方はEasy levelの短い会話や基礎表現（Elementary Podcasts・The Flatmatesなど）を選んでください。",
+    medium: "B1以上の方はMedium level・6 Minute English・BBC Newsの音声コンテンツを選んでください。"
+  },
+  timerNote: "BBCを開いている間もタイマーは進みます。休憩する場合は一時停止してください。"
+};
+
 const state = {
   currentPage: "home",
   currentUser: null,
@@ -2342,7 +2353,12 @@ function createCourseRun(course) {
     recordingCount: 0,
     writingText: "",
     note: "",
-    startedAt: new Date().toISOString()
+    listeningHeard: "",
+    listeningExpressions: "",
+    listeningDifficult: "",
+    startedAt: new Date().toISOString(),
+    stepStartedAt: new Date().toISOString(),
+    stepEndsAt: null
   };
 }
 
@@ -2365,23 +2381,36 @@ function startCourse() {
 
 function startCourseTimer() {
   stopCourseTimer();
+  const run = state.courseRun;
+  if (run && !run.stepEndsAt) {
+    run.stepStartedAt = new Date().toISOString();
+    run.stepEndsAt = new Date(Date.now() + run.remainingSeconds * 1000).toISOString();
+  }
   state.courseTimerId = window.setInterval(() => {
-    const run = state.courseRun;
-    if (!run || !run.isRunning || run.isComplete) {
-      return;
-    }
+    syncCourseTimerFromClock();
+  }, 1000);
+}
 
+function syncCourseTimerFromClock() {
+  const run = state.courseRun;
+  if (!run || !run.isRunning || run.isComplete) {
+    return;
+  }
+  if (run.stepEndsAt) {
+    const remaining = Math.max(0, Math.round((new Date(run.stepEndsAt) - Date.now()) / 1000));
+    const prev = run.remainingSeconds;
+    run.elapsedSeconds += Math.max(0, prev - remaining);
+    run.remainingSeconds = remaining;
+  } else {
     run.elapsedSeconds += 1;
     run.remainingSeconds -= 1;
-
-    if (run.remainingSeconds <= 0) {
-      completeCurrentCourseStep();
-      advanceCourseStep();
-      return;
-    }
-
-    renderCourseTimer();
-  }, 1000);
+  }
+  if (run.remainingSeconds <= 0) {
+    completeCurrentCourseStep();
+    advanceCourseStep();
+    return;
+  }
+  renderCourseTimer();
 }
 
 function stopCourseTimer() {
@@ -2413,14 +2442,15 @@ function syncCourseTextInputs() {
 
   const writingInput = document.querySelector("#course-writing-text");
   const noteInput = document.querySelector("#course-log-note");
+  const heardInput = document.querySelector("#course-listening-heard");
+  const expressionsInput = document.querySelector("#course-listening-expressions");
+  const difficultInput = document.querySelector("#course-listening-difficult");
 
-  if (writingInput) {
-    state.courseRun.writingText = writingInput.value;
-  }
-
-  if (noteInput) {
-    state.courseRun.note = noteInput.value;
-  }
+  if (writingInput) state.courseRun.writingText = writingInput.value;
+  if (noteInput) state.courseRun.note = noteInput.value;
+  if (heardInput) state.courseRun.listeningHeard = heardInput.value;
+  if (expressionsInput) state.courseRun.listeningExpressions = expressionsInput.value;
+  if (difficultInput) state.courseRun.listeningDifficult = difficultInput.value;
 }
 
 function advanceCourseStep() {
@@ -2436,6 +2466,8 @@ function advanceCourseStep() {
 
   run.currentStepIndex += 1;
   run.remainingSeconds = run.course.steps[run.currentStepIndex].minutes * 60;
+  run.stepStartedAt = new Date().toISOString();
+  run.stepEndsAt = new Date(Date.now() + run.remainingSeconds * 1000).toISOString();
   run.isRunning = true;
   renderCourseTimer();
 }
@@ -2449,6 +2481,8 @@ function goPreviousCourseStep() {
   syncCourseTextInputs();
   run.currentStepIndex -= 1;
   run.remainingSeconds = run.course.steps[run.currentStepIndex].minutes * 60;
+  run.stepStartedAt = new Date().toISOString();
+  run.stepEndsAt = new Date(Date.now() + run.remainingSeconds * 1000).toISOString();
   renderCourseTimer();
 }
 
@@ -2789,80 +2823,46 @@ function renderCourseStepUi(step) {
   }
 
   if (step.type === "listening") {
-    const dbItems = state.dbReadingMaterials.slice(0, 1);
-    const localItems = state.learningItems
-      .filter((item) => ["listening", "sentence"].includes(item.type))
-      .slice(0, 5);
-    const hasDb = dbItems.length > 0;
-
-    const dbSection = hasDb
-      ? `<section class="section-card"><h4>DB教材（リスニング）</h4>${dbItems
-          .map(
-            (m) => `
-            <div class="tts-item-card">
-              <div>
-                <strong>${escapeHtml(m.title || "")}</strong>
-                <p class="muted">${escapeHtml(m.content || m.body || "")}</p>
-              </div>
-              <div class="mini-actions">
-                <button type="button" class="soft-button tts-db-item"
-                  data-text="${escapeHtml(m.content || m.body || m.title || "")}"
-                  data-lang="${escapeHtml(state.courseFilters.language)}">再生</button>
-              </div>
-            </div>`
-          )
-          .join("")}</section>`
-      : "";
-
-    const localSection = localItems.length
-      ? `<div class="tts-item-list">${localItems
-          .map(
-            (item) => `
-              <div class="tts-item-card">
-                <div>
-                  <strong>${escapeHtml(item.title || "")}</strong>
-                  <p class="muted">${escapeHtml(item.content || item.example || item.meaning || "")}</p>
-                </div>
-                <div class="mini-actions">
-                  <button type="button" class="soft-button tts-course-item" data-id="${item.id}" data-rate="1">再生</button>
-                </div>
-              </div>`
-          )
-          .join("")}</div>`
-      : (!hasDb ? "<p>listeningまたはsentenceタイプのLearningItemがまだありません。自由入力欄で読み上げを試せます。</p>" : "");
+    const cefrLevel = state.courseFilters.cefrLevel || "A1";
+    const isEasy = ["A1", "A2"].includes(cefrLevel.toUpperCase());
+    const guideText = isEasy ? BBC_LISTENING_CONFIG.guideByLevel.easy : BBC_LISTENING_CONFIG.guideByLevel.medium;
+    const run = state.courseRun;
 
     elements.courseStepUi.innerHTML = `
       <div class="course-step-ui-grid">
-        ${dbSection}
-        ${localSection}
-        <label>
-          自由入力テキスト
-          <textarea id="course-tts-text" rows="5" placeholder="読み上げたい文章を入力"></textarea>
-        </label>
-        <div class="mini-actions">
-          <button type="button" id="course-tts-play" class="soft-button">再生</button>
-        </div>
+        <section class="section-card">
+          <p>この時間はBBC Learning Englishでリスニング学習を行います。${guideText}${BBC_LISTENING_CONFIG.timerNote}</p>
+          <div class="mini-actions" style="margin-top:0.75rem">
+            <a
+              href="${BBC_LISTENING_CONFIG.url}"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="soft-button"
+              id="bbc-open-link"
+            >${BBC_LISTENING_CONFIG.label}</a>
+          </div>
+        </section>
+        <section class="section-card">
+          <h4>リスニングメモ</h4>
+          <label>
+            聞いた内容メモ
+            <textarea id="course-listening-heard" rows="3" placeholder="どんな内容・トピックだったか">${escapeHtml(run.listeningHeard || "")}</textarea>
+          </label>
+          <label>
+            聞き取れた表現
+            <textarea id="course-listening-expressions" rows="3" placeholder="聞き取れたフレーズや表現">${escapeHtml(run.listeningExpressions || "")}</textarea>
+          </label>
+          <label>
+            難しかった語句
+            <textarea id="course-listening-difficult" rows="3" placeholder="聞き取れなかった語句・難しかった表現">${escapeHtml(run.listeningDifficult || "")}</textarea>
+          </label>
+        </section>
       </div>
     `;
     run.renderedStepIndex = run.currentStepIndex;
-    elements.courseStepUi.querySelectorAll(".tts-db-item").forEach((button) => {
-      button.addEventListener("click", () => {
-        const text = button.dataset.text;
-        const lang = languageToSpeechLang(button.dataset.lang);
-        setTtsText(text, button.dataset.lang);
-        speakText(text, { language: lang });
-      });
-    });
-    elements.courseStepUi.querySelectorAll(".tts-course-item").forEach((button) => {
-      button.addEventListener("click", () => {
-        const item = state.learningItems.find((entry) => entry.id === button.dataset.id);
-        if (item) speakLearningItem(item, { rate: Number(button.dataset.rate || 1) });
-      });
-    });
-    document.querySelector("#course-tts-play")?.addEventListener("click", () => {
-      const text = document.querySelector("#course-tts-text").value;
-      setTtsText(text, elements.ttsLanguage.value);
-      speakText(text);
+
+    ["course-listening-heard", "course-listening-expressions", "course-listening-difficult"].forEach((id) => {
+      document.querySelector(`#${id}`)?.addEventListener("input", syncCourseTextInputs);
     });
     return;
   }
@@ -2938,7 +2938,10 @@ function courseSessionPayload() {
     recordingCount: run.recordingCount,
     writingText: run.writingText,
     feedbackText: "",
-    note: run.note
+    note: run.note,
+    listeningHeard: run.listeningHeard,
+    listeningExpressions: run.listeningExpressions,
+    listeningDifficult: run.listeningDifficult
   };
 }
 
@@ -2962,6 +2965,13 @@ function renderCourseSummary() {
     <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
     <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>
     <article class="section-card"><h4>今日のメモ</h4><p>${escapeHtml(payload.note || "未入力")}</p></article>
+    ${payload.listeningHeard || payload.listeningExpressions || payload.listeningDifficult ? `
+    <article class="section-card">
+      <h4>リスニングメモ（BBC Learning English）</h4>
+      <p><strong>聞いた内容：</strong>${escapeHtml(payload.listeningHeard || "未入力")}</p>
+      <p><strong>聞き取れた表現：</strong>${escapeHtml(payload.listeningExpressions || "未入力")}</p>
+      <p><strong>難しかった語句：</strong>${escapeHtml(payload.listeningDifficult || "未入力")}</p>
+    </article>` : ""}
   `;
 }
 
@@ -3740,8 +3750,10 @@ elements.coursePause.addEventListener("click", () => {
   }
 });
 elements.courseResume.addEventListener("click", () => {
-  if (state.courseRun) {
-    state.courseRun.isRunning = true;
+  const run = state.courseRun;
+  if (run) {
+    run.isRunning = true;
+    run.stepEndsAt = new Date(Date.now() + run.remainingSeconds * 1000).toISOString();
     renderCourseTimer();
     startCourseTimer();
   }
@@ -3752,8 +3764,12 @@ elements.courseNext.addEventListener("click", () => {
   advanceCourseStep();
 });
 elements.courseExtend.addEventListener("click", () => {
-  if (state.courseRun) {
-    state.courseRun.remainingSeconds += 180;
+  const run = state.courseRun;
+  if (run) {
+    run.remainingSeconds += 180;
+    if (run.stepEndsAt) {
+      run.stepEndsAt = new Date(new Date(run.stepEndsAt).getTime() + 180000).toISOString();
+    }
     renderCourseTimer();
   }
 });
@@ -3862,6 +3878,12 @@ elements.ttsPlay.addEventListener("click", () => speakText());
 elements.ttsStop.addEventListener("click", stopSpeech);
 elements.ttsPause.addEventListener("click", pauseSpeech);
 elements.ttsResume.addEventListener("click", resumeSpeech);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    syncCourseTimerFromClock();
+  }
+});
 
 window.addEventListener("beforeunload", (event) => {
   stopActiveRecording();
