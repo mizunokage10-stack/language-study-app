@@ -2,6 +2,13 @@ function formatSupabaseError(action, error) {
   return `Supabase${action}に失敗しました: ${error.message || "詳細不明のエラー"}`;
 }
 
+function normalizeLearningLanguage(language = "") {
+  const normalized = String(language || "").toLowerCase();
+  if (normalized === "en") return "english";
+  if (normalized === "zh") return "chinese";
+  return normalized || "english";
+}
+
 function assertSupabaseUser(user) {
   if (!user?.id) {
     throw new Error("認証状態を取得できませんでした。ログインし直してください。");
@@ -12,9 +19,10 @@ function toLearningItem(row) {
   return {
     id: row.id,
     type: row.type || "vocabulary",
-    language: row.language || "english",
+    language: normalizeLearningLanguage(row.language || "english"),
     title: row.title || "",
     meaning: row.meaning || "",
+    pos: row.pos || "",
     content: row.content || "",
     example: row.example || "",
     exampleTranslation: row.example_translation || "",
@@ -725,7 +733,7 @@ export function createRepositories({
         return { items: data || [] };
       }
       // ローカルバックエンドへフォールバック
-      const params = new URLSearchParams({ language, cefr_level: cefrLevel, limit: String(limit) });
+      const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
       if (domain) params.set("domain", domain);
       const res = await fetch(`/api/materials/vocabulary?${params}`);
       if (!res.ok) throw new Error(`語彙取得エラー: ${res.status}`);
@@ -746,7 +754,7 @@ export function createRepositories({
         if (error) throw new Error(formatSupabaseError("文章教材取得", error));
         return { items: data || [] };
       }
-      const params = new URLSearchParams({ language, cefr_level: cefrLevel, limit: String(limit) });
+      const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
       if (domain) params.set("domain", domain);
       const res = await fetch(`/api/materials/reading?${params}`);
       if (!res.ok) throw new Error(`文章教材取得エラー: ${res.status}`);

@@ -34,6 +34,8 @@ function normalizeLearningItemType(type) {
 }
 
 function normalizeLearningLanguage(language) {
+  if (language === "en") return "english";
+  if (language === "zh") return "chinese";
   return learningLanguages.has(language) ? language : "other";
 }
 
@@ -51,6 +53,7 @@ export function sanitizeLearningItem(item, existing = null) {
     language: normalizeLearningLanguage(item.language),
     title: item.title || "",
     meaning: item.meaning || "",
+    pos: item.pos || "",
     content: item.content || "",
     example: item.example || "",
     exampleTranslation: item.exampleTranslation || "",
@@ -146,6 +149,7 @@ export async function listLearningItems(filters = {}) {
       const haystack = [
         item.title,
         item.meaning,
+        item.pos,
         item.content,
         item.example,
         item.exampleTranslation,

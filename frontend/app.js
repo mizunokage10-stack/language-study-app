@@ -649,11 +649,12 @@ function formatDate(value) {
 }
 
 function languageLabel(language) {
-  return language === "chinese"
+  const normalized = normalizeLearningLanguageCode(language);
+  return normalized === "chinese"
     ? "中国語"
-    : language === "english"
+    : normalized === "english"
       ? "英語"
-      : language === "other"
+      : normalized === "other"
         ? "その他"
         : language;
 }
@@ -1851,6 +1852,74 @@ function formatTags(tags = []) {
   return Array.isArray(tags) ? tags.join(", ") : "";
 }
 
+function courseLanguageCode(language = state.courseFilters.language) {
+  return ({ english: "en", chinese: "zh" }[language] || language || "").toLowerCase();
+}
+
+function normalizeLearningLanguageCode(language = "") {
+  const normalized = String(language || "").toLowerCase();
+  if (normalized === "english" || normalized.startsWith("en")) return "english";
+  if (normalized === "chinese" || normalized.startsWith("zh")) return "chinese";
+  if (normalized === "japanese" || normalized.startsWith("ja")) return "japanese";
+  return normalized || "other";
+}
+
+function isSameLearningLanguage(itemLanguage, targetLanguage) {
+  return normalizeLearningLanguageCode(itemLanguage) === normalizeLearningLanguageCode(targetLanguage);
+}
+
+function buildVocabularyKnowledgeNote({ pos = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
+  return [
+    pos ? `品詞: ${pos}` : "",
+    collocation ? `コロケーション: ${collocation}` : "",
+    note ? `使い方メモ: ${note}` : "",
+    scene ? `使う場面: ${scene}` : "",
+    cefr ? `レベル: ${cefr}` : "",
+    domain ? `領域: ${domain}` : ""
+  ].filter(Boolean).join("\n");
+}
+
+function noteValueForLabel(note = "", label = "") {
+  const prefix = `${label}:`;
+  return String(note || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(prefix))
+    ?.slice(prefix.length)
+    .trim() || "";
+}
+
+function itemDetailValue(item, key, noteLabel = "") {
+  return item?.[key] || (noteLabel ? noteValueForLabel(item?.note, noteLabel) : "");
+}
+
+function vocabularyAnswerRows(item) {
+  return [
+    ["意味", item.meaning],
+    ["品詞", itemDetailValue(item, "pos", "品詞")],
+    ["例文", item.example],
+    ["例文訳", item.exampleTranslation],
+    ["コロケーション", itemDetailValue(item, "collocation", "コロケーション")],
+    ["覚えるコツ", noteValueForLabel(item.note, "使い方メモ") || item.note],
+    ["レベル", itemDetailValue(item, "cefr", "レベル") || (Array.isArray(item.tags) ? item.tags.find((tag) => /^(A1|A2|B1|B2|C1|C2)$/i.test(tag)) : "")],
+    ["場面", itemDetailValue(item, "scene", "使う場面")],
+    ["領域", itemDetailValue(item, "domain", "領域")]
+  ].filter(([, value]) => value);
+}
+
+function renderVocabularyAnswerDetails(item) {
+  const rows = vocabularyAnswerRows(item);
+  if (!rows.length) return "";
+
+  return `
+    <dl class="vocab-answer-details">
+      ${rows
+        .map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`)
+        .join("")}
+    </dl>
+  `;
+}
+
 function tomorrowIsoDate() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
@@ -1863,9 +1932,10 @@ function sanitizeLocalLearningItem(item, existing = null) {
   return {
     id: existing?.id || item.id || createLocalId(),
     type: item.type || "vocabulary",
-    language: item.language || "english",
+    language: normalizeLearningLanguageCode(item.language || "english"),
     title: item.title || "",
     meaning: item.meaning || "",
+    pos: item.pos || "",
     content: item.content || "",
     example: item.example || "",
     exampleTranslation: item.exampleTranslation || "",
@@ -1941,6 +2011,7 @@ function filterLearningItems(items, params) {
       const haystack = [
         item.title,
         item.meaning,
+        item.pos,
         item.content,
         item.example,
         item.exampleTranslation,
@@ -3165,8 +3236,13 @@ function shuffleArray(arr) {
 }
 
 function initVocabQuiz() {
+  const courseLanguage = state.courseFilters.language || "";
   const items = state.learningItems.filter(
-    (item) => item.type === "vocabulary" && item.title && item.meaning
+    (item) =>
+      item.type === "vocabulary" &&
+      item.title &&
+      item.meaning &&
+      (!courseLanguage || isSameLearningLanguage(item.language, courseLanguage))
   );
   state.vocabQuiz = {
     queue: shuffleArray(items),
@@ -3231,6 +3307,7 @@ function renderVocabQuizCard(container) {
           <p>${escapeHtml(userInput || "（未入力）")}</p>
           <p class="muted">正解:</p>
           <p class="vocab-quiz-correct-answer">${escapeHtml(item.meaning)}</p>
+          ${renderVocabularyAnswerDetails(item)}
         </div>
         <p>正解でしたか？</p>
         <div class="mini-actions">
@@ -3276,6 +3353,7 @@ function renderVocabQuizCard(container) {
           <p class="muted">正解:</p>
           <p class="vocab-quiz-correct-answer">${escapeHtml(item.title)}</p>
           ${item.meaning ? `<p class="muted">意味: ${escapeHtml(item.meaning)}</p>` : ""}
+          ${renderVocabularyAnswerDetails(item)}
         </div>
         <p>正解でしたか？${isCorrect ? " ✓ スペルが一致しています" : " ✗ スペルが異なります"}</p>
         <div class="mini-actions">
@@ -3372,14 +3450,22 @@ async function loadDbMaterialsTab() {
 async function importDbVocabAsLearningItem(vocab) {
   const payload = {
     type: "vocabulary",
-    language: vocab.language || "english",
+    language: normalizeLearningLanguageCode(vocab.language || state.courseFilters.language || "english"),
     title: vocab.word || vocab.title || "",
     meaning: vocab.meaning_ja || vocab.meaning || "",
+    pos: vocab.part_of_speech || vocab.partOfSpeech || "",
     content: vocab.definition || vocab.content || "",
     example: vocab.example || "",
     exampleTranslation: vocab.example_ja || vocab.example_translation || "",
-    note: `DB教材 (${vocab.cefr_level || ""})`,
-    tags: [vocab.cefr_level || ""].filter(Boolean)
+    note: buildVocabularyKnowledgeNote({
+      pos: vocab.part_of_speech || vocab.partOfSpeech || "",
+      collocation: Array.isArray(vocab.collocations) ? vocab.collocations.join(", ") : vocab.collocations || vocab.collocation || "",
+      note: vocab.usage_note || vocab.note || "",
+      scene: vocab.scene || vocab.context || "",
+      cefr: vocab.cefr_level || "",
+      domain: vocab.domain || ""
+    }),
+    tags: [vocab.cefr_level || "", vocab.domain || ""].filter(Boolean)
   };
   const result = await learningItemsRepository.createLearningItem(payload);
   const newItem = result.item;
@@ -3400,7 +3486,8 @@ async function loadLocalReadingMaterials() {
 }
 
 function selectReadingMaterial() {
-  return state.localReadingMaterials.find((m) => !m.completed) || null;
+  const targetLanguage = courseLanguageCode();
+  return state.localReadingMaterials.find((m) => !m.completed && (!targetLanguage || String(m.language || "").toLowerCase() === targetLanguage)) || null;
 }
 
 const READING_SUB_STEPS = [
@@ -4342,13 +4429,7 @@ function reviewPromptForItem(item) {
 
 function reviewAnswerRows(item) {
   if (item.type === "vocabulary") {
-    return [
-      ["意味", item.meaning],
-      ["例文", item.example],
-      ["例文訳", item.exampleTranslation],
-      ["メモ", item.note],
-      ["タグ", formatTags(item.tags)]
-    ];
+    return vocabularyAnswerRows(item);
   }
 
   if (item.type === "grammar") {
@@ -4662,24 +4743,30 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   const lines = raw.split("\n").filter(Boolean);
   const items = lines.map((line) => {
     const cols = line.split(" / ");
+    const pos = (cols[2] || "").trim();
+    const collocation = (cols[5] || "").trim();
+    const note = (cols[6] || "").trim();
+    const scene = (cols[7] || "").trim();
+    const cefr = (cols[8] || "").trim();
+    const domain = (cols[9] || "").trim();
     return {
       type: "vocabulary",
       language,
       title: (cols[0] || "").trim(),
       meaning: (cols[1] || "").trim(),
-      pos: (cols[2] || "").trim(),
+      pos,
       example: (cols[3] || "").trim(),
       exampleTranslation: (cols[4] || "").trim(),
-      collocation: (cols[5] || "").trim(),
-      note: (cols[6] || "").trim(),
-      scene: (cols[7] || "").trim(),
-      cefr: (cols[8] || "").trim(),
-      domain: (cols[9] || "").trim(),
-      tags: [(cols[8] || "").trim(), (cols[9] || "").trim()].filter(Boolean)
+      collocation,
+      note: buildVocabularyKnowledgeNote({ pos, collocation, note, scene, cefr, domain }),
+      scene,
+      cefr,
+      domain,
+      tags: [cefr, domain].filter(Boolean)
     };
   }).filter((item) => item.title);
 
-  if (!items.length) { setStatus("有効な単語が見つかりませんでした。タブ区切りか確認してください。"); return; }
+  if (!items.length) { setStatus("有効な単語が見つかりませんでした。「単語 / 意味 / 品詞 / ...」形式か確認してください。"); return; }
 
   await withBusy(async () => {
     for (const item of items) {

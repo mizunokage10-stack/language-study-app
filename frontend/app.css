@@ -503,6 +503,16 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
 .vocab-quiz-word { font-size: 1.6rem; font-weight: 900; color: white; margin: 0; }
 .vocab-quiz-answer-block { background: rgba(76,240,255,0.1); border: 1px solid rgba(76,240,255,0.3); border-radius: 12px; padding: 14px; display: grid; gap: 4px; }
 .vocab-quiz-correct-answer { font-weight: 700; font-size: 1.1rem; color: #4cf0ff; margin: 0; }
+.vocab-answer-details {
+  margin: 8px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  display: grid;
+  grid-template-columns: minmax(96px, max-content) 1fr;
+  gap: 8px 12px;
+}
+.vocab-answer-details dt { color: rgba(255,255,255,0.58); font-weight: 800; }
+.vocab-answer-details dd { margin: 0; white-space: pre-wrap; line-height: 1.65; }
 .vocab-quiz-progress { font-size: 0.82rem; color: rgba(255,255,255,0.5); }
 
 /* Misc */
