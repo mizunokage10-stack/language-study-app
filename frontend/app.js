@@ -1,15 +1,15 @@
 import { supabase } from "./supabase-client.js";
 import { createRepositories } from "./repositories.js";
 
-// BBC Learning English 外部教材設定
-const BBC_LISTENING_CONFIG = {
-  url: "https://www.bbc.co.uk/learningenglish/",
-  label: "BBC Learning Englishを開く",
+// VOA Learning English 外部教材設定
+const LISTENING_RESOURCE_CONFIG = {
+  url: "https://learningenglish.voanews.com/",
+  label: "VOA Learning Englishを開く",
   guideByLevel: {
-    easy: "A1〜A2の方はEasy levelの短い会話や基礎表現（Elementary Podcasts・The Flatmatesなど）を選んでください。",
-    medium: "B1以上の方はMedium level・6 Minute English・BBC Newsの音声コンテンツを選んでください。"
+    easy: "A1〜A2の方はLearning English TV・Let's Learn English・短めの記事音声を選んでください。",
+    medium: "B1以上の方はVOA Learning Englishの記事音声やニュース系コンテンツを選んでください。"
   },
-  timerNote: "BBCを開いている間もタイマーは進みます。休憩する場合は一時停止してください。"
+  timerNote: "VOAを開いている間もタイマーは進みます。休憩する場合は一時停止してください。"
 };
 
 const state = {
@@ -42,6 +42,7 @@ const state = {
   courseFilters: { language: "english", cefrLevel: "A1", domain: "", duration: "" },
   ttsVoices: [],
   ttsRequestId: 0,
+  migrationPromise: null,
   dictationSession: null,
   recordingSession: null,
   mediaRecorder: null,
@@ -57,6 +58,11 @@ const localStoreKeys = {
   notebookItems: "language-study.notebookItems",
   historyItems: "language-study.historyItems",
   readingMaterials: "language-study.readingMaterials"
+};
+
+const userStoreKeys = {
+  readingMaterials: "languageStudyReadingMaterials",
+  migrationMarkerPrefix: "language-study.supabaseMigration.v2"
 };
 
 const elements = {
@@ -207,7 +213,7 @@ const coursePresets = [
     description: "忙しい日でも最低限の学習",
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-30"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
-      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-30"].listening, instructions: "BBC Learning Englishでリスニング練習を行います。" },
+      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-30"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
       { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-30"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
@@ -219,7 +225,7 @@ const coursePresets = [
     description: "標準バランス学習",
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-60"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
-      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-60"].listening, instructions: "BBC Learning Englishでリスニング練習を行います。" },
+      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-60"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
       { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-60"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
@@ -231,7 +237,7 @@ const coursePresets = [
     description: "しっかり集中学習",
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-90"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
-      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-90"].listening, instructions: "BBC Learning Englishでリスニング練習を行います。" },
+      { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-90"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
       { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-90"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
@@ -259,6 +265,35 @@ function renderAuthPanel(user) {
 function setAuthMessage(message, isError = false) {
   elements.authMessage.textContent = message;
   elements.authMessage.classList.toggle("auth-message--error", isError);
+}
+
+async function refreshCurrentPageAfterAuth() {
+  if (state.currentPage === "learning-items") {
+    await loadLearningItems();
+  }
+  if (state.currentPage === "review") {
+    await loadReviewItems();
+  }
+  if (state.currentPage === "history") {
+    await loadHistory();
+  }
+  if (state.currentPage === "reading-list") {
+    await loadReadingListPage();
+  }
+  if (state.currentPage === "course") {
+    await loadReadingMaterialsList();
+  }
+}
+
+async function applyAuthSession(session) {
+  const user = session?.user ?? null;
+  renderAuthPanel(user);
+
+  if (user) {
+    await migrateLocalDataToSupabase(user);
+  }
+
+  await refreshCurrentPageAfterAuth();
 }
 
 async function handleLogin() {
@@ -362,20 +397,11 @@ function initAuth() {
         setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
         return;
       }
-      renderAuthPanel(data.session?.user ?? null);
+      applyAuthSession(data.session);
     });
 
     supabase.auth.onAuthStateChange((_event, session) => {
-      renderAuthPanel(session?.user ?? null);
-      if (state.currentPage === "learning-items") {
-        loadLearningItems();
-      }
-      if (state.currentPage === "review") {
-        loadReviewItems();
-      }
-      if (state.currentPage === "history") {
-        loadHistory();
-      }
+      applyAuthSession(session);
     });
   } catch (error) {
     state.authReady = true;
@@ -426,6 +452,120 @@ function writeLocalCollection(key, value) {
 
 function localJsonResponse(value) {
   return structuredClone(value);
+}
+
+function currentUserId() {
+  return state.currentUser?.id || "";
+}
+
+function canUseSupabaseUserStore() {
+  return Boolean(supabase && currentUserId());
+}
+
+function migrationMarkerKey(userId = currentUserId()) {
+  return `${userStoreKeys.migrationMarkerPrefix}.${userId}`;
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+}
+
+function readingMaterialSignature(item) {
+  return [item?.title, item?.language, item?.level, item?.domain, item?.originalText]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .join("|");
+}
+
+async function readUserMetadata() {
+  if (!canUseSupabaseUserStore()) {
+    return {};
+  }
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    throw new Error(error.message || "ユーザーデータの取得に失敗しました。");
+  }
+
+  return data.user?.user_metadata || {};
+}
+
+async function readSupabaseReadingMaterials() {
+  const metadata = await readUserMetadata();
+  const items = metadata[userStoreKeys.readingMaterials];
+  return Array.isArray(items) ? items : [];
+}
+
+async function writeSupabaseReadingMaterials(items) {
+  const metadata = await readUserMetadata();
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      ...metadata,
+      [userStoreKeys.readingMaterials]: items
+    }
+  });
+
+  if (error) {
+    throw new Error(error.message || "文章教材の保存に失敗しました。");
+  }
+}
+
+async function handleSupabaseReadingMaterials(url, options = {}) {
+  const parsedUrl = new URL(url, window.location.origin);
+  const path = parsedUrl.pathname;
+  const method = options.method || "GET";
+  const body = options.body ? JSON.parse(options.body) : {};
+  const items = await readSupabaseReadingMaterials();
+
+  if (path === "/api/reading-materials" && method === "GET") {
+    return localJsonResponse({ items: sortByCreatedAtDesc(items) });
+  }
+
+  if (path === "/api/reading-materials" && method === "POST") {
+    const timestamp = new Date().toISOString();
+    const item = {
+      id: body.id || createLocalId(),
+      type: body.type || "reading_text",
+      title: body.title || "",
+      language: body.language || "en",
+      level: body.level || "",
+      domain: body.domain || "",
+      sourceNote: body.sourceNote || "",
+      originalText: body.originalText || "",
+      japaneseTranslation: body.japaneseTranslation || "",
+      firstReading: body.firstReading || { targetSeconds: 90, instruction: "辞書を使わず、止まらずに読んでください。" },
+      comprehensionQuestions: Array.isArray(body.comprehensionQuestions) ? body.comprehensionQuestions : [],
+      intensiveReading: body.intensiveReading || { vocabulary: [], chunks: [], grammarPoints: [], notes: [] },
+      rereading: body.rereading || { targetSeconds: 60, instruction: "初読より少し速く読むことを目標にしてください。" },
+      oralPractice: body.oralPractice || { instruction: "", focusChunks: [] },
+      oneSentenceOutput: body.oneSentenceOutput || { instruction: "", recommendedExpressions: [] },
+      completed: Boolean(body.completed),
+      createdAt: body.createdAt || timestamp,
+      updatedAt: timestamp
+    };
+    const nextItems = [item, ...items];
+    await writeSupabaseReadingMaterials(nextItems);
+    return localJsonResponse({ item });
+  }
+
+  if (path.startsWith("/api/reading-materials/")) {
+    const id = decodeURIComponent(path.split("/").pop());
+    const index = items.findIndex((item) => item.id === id);
+
+    if (method === "PATCH" && index !== -1) {
+      const nextItems = [...items];
+      nextItems[index] = { ...nextItems[index], ...body, updatedAt: new Date().toISOString() };
+      await writeSupabaseReadingMaterials(nextItems);
+      return localJsonResponse({ item: nextItems[index] });
+    }
+
+    if (method === "DELETE" && index !== -1) {
+      const nextItems = items.filter((item) => item.id !== id);
+      await writeSupabaseReadingMaterials(nextItems);
+      return localJsonResponse({ ok: true });
+    }
+  }
+
+  throw new Error("この文章教材の操作は未対応です。");
 }
 
 function sortByCreatedAtDesc(items) {
@@ -556,6 +696,10 @@ function languageToSpeechLang(language) {
 }
 
 function learningItemSpeechText(item) {
+  if (item?.type === "vocabulary") {
+    return String(item.title || item.content || "").trim();
+  }
+
   return [item?.content, item?.example, item?.title].find((value) => String(value || "").trim()) || "";
 }
 
@@ -1653,6 +1797,12 @@ function switchPage(pageId) {
 }
 
 async function fetchJson(url, options = {}) {
+  const parsedUrl = new URL(url, window.location.origin);
+
+  if (canUseSupabaseUserStore() && parsedUrl.pathname.startsWith("/api/reading-materials")) {
+    return handleSupabaseReadingMaterials(url, options);
+  }
+
   if (shouldUseLocalStorageBackend()) {
     return handleLocalJson(url, options);
   }
@@ -2172,6 +2322,298 @@ const { materialsRepository, learningItemsRepository, srsRepository, learningSes
   filterLearningItems,
   tomorrowIsoDate
 });
+
+function learningItemSignature(item) {
+  return [item?.type, item?.language, item?.title, item?.meaning, item?.content, item?.example]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .join("|");
+}
+
+function sessionSignature(item) {
+  return [item?.date, item?.courseId, item?.courseName, item?.createdAt]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .join("|");
+}
+
+function studyLogSignature(item) {
+  return [item?.date, item?.createdAt, item?.freeNote]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .join("|");
+}
+
+function learningItemRowForSupabase(item, userId, includeId = true) {
+  const row = {
+    user_id: userId,
+    type: item.type || "vocabulary",
+    language: item.language || "english",
+    title: item.title || "",
+    meaning: item.meaning || "",
+    content: item.content || "",
+    example: item.example || "",
+    example_translation: item.exampleTranslation || "",
+    note: item.note || "",
+    tags: Array.isArray(item.tags) ? item.tags : []
+  };
+
+  if (includeId && isUuid(item.id)) {
+    row.id = item.id;
+  }
+
+  return row;
+}
+
+function srsRowForSupabase(item, userId, itemId) {
+  return {
+    user_id: userId,
+    item_id: itemId,
+    next_review_date: item.nextReviewDate || null,
+    interval: Number(item.interval ?? 1),
+    ease_factor: Number(item.easeFactor ?? 2.5),
+    review_count: Number(item.reviewCount ?? 0),
+    mistake_count: Number(item.mistakeCount ?? 0),
+    last_reviewed_at: item.lastReviewedAt || null,
+    mastery_level: Number(item.masteryLevel ?? 0)
+  };
+}
+
+function learningSessionRowForSupabase(session, userId, idMap, includeId = true) {
+  const row = {
+    user_id: userId,
+    date: session.date || new Date().toISOString().slice(0, 10),
+    course_id: session.courseId || "",
+    course_name: session.courseName || "",
+    planned_minutes: Number(session.plannedMinutes || 0),
+    actual_minutes: Number(session.actualMinutes || 0),
+    completed_steps: Array.isArray(session.completedSteps) ? session.completedSteps : [],
+    skipped_steps: Array.isArray(session.skippedSteps) ? session.skippedSteps : [],
+    reviewed_item_ids: Array.isArray(session.reviewedItemIds) ? session.reviewedItemIds.map((id) => idMap.get(id) || id) : [],
+    mistake_item_ids: Array.isArray(session.mistakeItemIds) ? session.mistakeItemIds.map((id) => idMap.get(id) || id) : [],
+    dictation_count: Number(session.dictationCount || 0),
+    recording_count: Number(session.recordingCount || 0),
+    writing_text: session.writingText || "",
+    feedback_text: session.feedbackText || "",
+    note: session.note || ""
+  };
+
+  if (includeId && isUuid(session.id)) {
+    row.id = session.id;
+  }
+
+  return row;
+}
+
+function studyLogRowForSupabase(log, userId, includeId = true) {
+  const row = {
+    user_id: userId,
+    date: log.date || new Date().toISOString().slice(0, 10),
+    learned_items: Array.isArray(log.learnedItems) ? log.learnedItems : [],
+    mistakes: Array.isArray(log.mistakes) ? log.mistakes : [],
+    feedback: log.feedback || "",
+    tomorrow_review_items: Array.isArray(log.tomorrowReviewItems) ? log.tomorrowReviewItems : [],
+    free_note: log.freeNote || ""
+  };
+
+  if (includeId && isUuid(log.id)) {
+    row.id = log.id;
+  }
+
+  return row;
+}
+
+async function insertWithOptionalId(tableName, row) {
+  const { data, error } = await supabase.from(tableName).insert(row).select("*").single();
+  if (!error) {
+    return data;
+  }
+
+  if ("id" in row) {
+    const { id, ...rowWithoutId } = row;
+    const retry = await supabase.from(tableName).insert(rowWithoutId).select("*").single();
+    if (!retry.error) {
+      return retry.data;
+    }
+    throw retry.error;
+  }
+
+  throw error;
+}
+
+async function migrateLearningDataToSupabase(user) {
+  const userId = user?.id;
+  if (!supabase || !userId) {
+    return { migratedCount: 0, idMap: new Map() };
+  }
+
+  let migratedCount = 0;
+  const idMap = new Map();
+  const localItems = readLocalCollection(localStoreKeys.learningItems);
+  const localSrs = readLocalCollection(localStoreKeys.srsData);
+  const localSessions = readLocalCollection(localStoreKeys.learningSessions);
+  const localStudyLogs = readLocalCollection(localStoreKeys.studyLogs);
+
+  const { data: remoteItems, error: itemsError } = await supabase
+    .from("learning_items")
+    .select("*")
+    .eq("user_id", userId);
+  if (itemsError) throw itemsError;
+
+  const remoteItemsById = new Map((remoteItems || []).map((item) => [item.id, item]));
+  const remoteItemsBySignature = new Map(
+    (remoteItems || []).map((item) => [
+      learningItemSignature({
+        type: item.type,
+        language: item.language,
+        title: item.title,
+        meaning: item.meaning,
+        content: item.content,
+        example: item.example
+      }),
+      item
+    ])
+  );
+
+  for (const item of localItems) {
+    const existing = remoteItemsById.get(item.id) || remoteItemsBySignature.get(learningItemSignature(item));
+    if (existing) {
+      idMap.set(item.id, existing.id);
+      continue;
+    }
+
+    const inserted = await insertWithOptionalId("learning_items", learningItemRowForSupabase(item, userId));
+    idMap.set(item.id, inserted.id);
+    remoteItemsById.set(inserted.id, inserted);
+    remoteItemsBySignature.set(learningItemSignature(item), inserted);
+    migratedCount += 1;
+  }
+
+  const { data: remoteSrs, error: srsError } = await supabase
+    .from("srs_data")
+    .select("item_id")
+    .eq("user_id", userId);
+  if (srsError) throw srsError;
+
+  const remoteSrsItemIds = new Set((remoteSrs || []).map((item) => item.item_id));
+  for (const item of localSrs) {
+    const mappedItemId = idMap.get(item.itemId) || item.itemId;
+    if (!mappedItemId || remoteSrsItemIds.has(mappedItemId)) {
+      continue;
+    }
+    const { error } = await supabase.from("srs_data").insert(srsRowForSupabase(item, userId, mappedItemId));
+    if (error) throw error;
+    remoteSrsItemIds.add(mappedItemId);
+    migratedCount += 1;
+  }
+
+  const { data: remoteSessions, error: sessionsError } = await supabase
+    .from("learning_sessions")
+    .select("id,date,course_id,course_name,created_at")
+    .eq("user_id", userId);
+  if (sessionsError) throw sessionsError;
+
+  const remoteSessionIds = new Set((remoteSessions || []).map((item) => item.id));
+  const remoteSessionSignatures = new Set(
+    (remoteSessions || []).map((item) =>
+      sessionSignature({ date: item.date, courseId: item.course_id, courseName: item.course_name, createdAt: item.created_at })
+    )
+  );
+  for (const session of localSessions) {
+    const signature = sessionSignature(session);
+    if (remoteSessionIds.has(session.id) || remoteSessionSignatures.has(signature)) {
+      continue;
+    }
+    await insertWithOptionalId("learning_sessions", learningSessionRowForSupabase(session, userId, idMap));
+    remoteSessionSignatures.add(signature);
+    migratedCount += 1;
+  }
+
+  const { data: remoteLogs, error: logsError } = await supabase
+    .from("study_logs")
+    .select("id,date,free_note,created_at")
+    .eq("user_id", userId);
+  if (logsError) throw logsError;
+
+  const remoteLogIds = new Set((remoteLogs || []).map((item) => item.id));
+  const remoteLogSignatures = new Set(
+    (remoteLogs || []).map((item) => studyLogSignature({ date: item.date, freeNote: item.free_note, createdAt: item.created_at }))
+  );
+  for (const log of localStudyLogs) {
+    const signature = studyLogSignature(log);
+    if (remoteLogIds.has(log.id) || remoteLogSignatures.has(signature)) {
+      continue;
+    }
+    await insertWithOptionalId("study_logs", studyLogRowForSupabase(log, userId));
+    remoteLogSignatures.add(signature);
+    migratedCount += 1;
+  }
+
+  return { migratedCount, idMap };
+}
+
+async function migrateReadingMaterialsToSupabase() {
+  if (!canUseSupabaseUserStore()) {
+    return 0;
+  }
+
+  const localItems = readLocalCollection(localStoreKeys.readingMaterials);
+  if (!localItems.length) {
+    return 0;
+  }
+
+  const remoteItems = await readSupabaseReadingMaterials();
+  const remoteIds = new Set(remoteItems.map((item) => item.id));
+  const remoteSignatures = new Set(remoteItems.map(readingMaterialSignature));
+  const additions = localItems.filter((item) => !remoteIds.has(item.id) && !remoteSignatures.has(readingMaterialSignature(item)));
+
+  if (!additions.length) {
+    return 0;
+  }
+
+  await writeSupabaseReadingMaterials([...additions, ...remoteItems]);
+  return additions.length;
+}
+
+async function migrateLocalDataToSupabase(user) {
+  if (!supabase || !user?.id) {
+    return;
+  }
+
+  if (state.migrationPromise) {
+    return state.migrationPromise;
+  }
+
+  state.migrationPromise = (async () => {
+    const markerKey = migrationMarkerKey(user.id);
+    const issues = [];
+    let migratedCount = 0;
+
+    try {
+      const result = await migrateLearningDataToSupabase(user);
+      migratedCount += result.migratedCount;
+    } catch (error) {
+      console.warn("Learning data migration failed", error);
+      issues.push("単語・履歴データの一部");
+    }
+
+    try {
+      migratedCount += await migrateReadingMaterialsToSupabase();
+    } catch (error) {
+      console.warn("Reading material migration failed", error);
+      issues.push("文章教材");
+    }
+
+    localStorage.setItem(markerKey, JSON.stringify({ migratedAt: new Date().toISOString(), migratedCount, issues }));
+
+    if (migratedCount > 0) {
+      setAuthMessage(`${migratedCount}件のローカル保存データをログイン中のアカウントへ移行しました。`);
+    } else if (issues.length) {
+      setAuthMessage(`ログインしました。一部データの移行を確認できませんでした: ${issues.join("、")}`, true);
+    }
+  })().finally(() => {
+    state.migrationPromise = null;
+  });
+
+  return state.migrationPromise;
+}
 
 async function loadLearningItems() {
   try {
@@ -3260,21 +3702,21 @@ function renderCourseStepUi(step) {
   if (step.type === "listening") {
     const cefrLevel = state.courseFilters.cefrLevel || "A1";
     const isEasy = ["A1", "A2"].includes(cefrLevel.toUpperCase());
-    const guideText = isEasy ? BBC_LISTENING_CONFIG.guideByLevel.easy : BBC_LISTENING_CONFIG.guideByLevel.medium;
+    const guideText = isEasy ? LISTENING_RESOURCE_CONFIG.guideByLevel.easy : LISTENING_RESOURCE_CONFIG.guideByLevel.medium;
     const run = state.courseRun;
 
     elements.courseStepUi.innerHTML = `
       <div class="course-step-ui-grid">
         <section class="section-card">
-          <p>この時間はBBC Learning Englishでリスニング学習を行います。${guideText}${BBC_LISTENING_CONFIG.timerNote}</p>
+          <p>この時間はVOA Learning Englishでリスニング学習を行います。${guideText}${LISTENING_RESOURCE_CONFIG.timerNote}</p>
           <div class="mini-actions" style="margin-top:0.75rem">
             <a
-              href="${BBC_LISTENING_CONFIG.url}"
+              href="${LISTENING_RESOURCE_CONFIG.url}"
               target="_blank"
               rel="noopener noreferrer"
               class="soft-button"
               id="bbc-open-link"
-            >${BBC_LISTENING_CONFIG.label}</a>
+            >${LISTENING_RESOURCE_CONFIG.label}</a>
           </div>
         </section>
         <section class="section-card">
@@ -3385,7 +3827,7 @@ function renderCourseSummary() {
     <article class="section-card"><h4>今日のメモ</h4><p>${escapeHtml(payload.note || "未入力")}</p></article>
     ${payload.listeningHeard || payload.listeningExpressions || payload.listeningDifficult ? `
     <article class="section-card">
-      <h4>リスニングメモ（BBC Learning English）</h4>
+      <h4>リスニングメモ（VOA Learning English）</h4>
       <p><strong>聞いた内容：</strong>${escapeHtml(payload.listeningHeard || "未入力")}</p>
       <p><strong>聞き取れた表現：</strong>${escapeHtml(payload.listeningExpressions || "未入力")}</p>
       <p><strong>難しかった語句：</strong>${escapeHtml(payload.listeningDifficult || "未入力")}</p>

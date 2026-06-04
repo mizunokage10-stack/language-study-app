@@ -75,8 +75,9 @@ PORT=8787
 ## Vercel で使う場合
 
 Vercel では静的アプリとして配信します。
-外部DBをまだ使わないため、Vercel上のデータは利用中ブラウザの `localStorage` に保存されます。
-端末やブラウザをまたいだ同期は、今後DBを追加する段階で対応します。
+ログイン済みの場合、単語・SRS・学習セッション・学習ログは Supabase DB に保存されます。
+文章教材はログイン中の Supabase ユーザーデータへ保存され、未ログイン時は利用中ブラウザの `localStorage` に保存されます。
+ログイン時にブラウザ内のローカル保存データをアカウント側へ自動移行します。
 
 ### Supabase Auth
 
@@ -90,7 +91,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 このアプリは Next.js ではないため、Vercel のビルド時に `frontend/supabase-config.js` を生成してブラウザへ公開設定を渡します。
 使用するのは anon public key のみです。`service_role` key は設定しないでください。
-現時点では認証のみを導入しており、学習データの保存先はまだ Supabase DB に移行していません。
+ログイン後の学習データ保存に使うため、Supabase 側に `learning_items`、`srs_data`、`learning_sessions`、`study_logs` の各テーブルと RLS ポリシーを用意してください。
 
 ## 使い方
 
