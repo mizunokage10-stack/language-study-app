@@ -4424,7 +4424,7 @@ elements.deleteLearningItem.addEventListener("click", async () => {
   await deleteLearningItem(id);
 });
 
-elements.learningItemTableBody.addEventListener("click", async (event) => {
+elements.learningItemTableBody?.addEventListener("click", async (event) => {
   const target = event.target;
 
   if (target.classList.contains("learning-item-view")) {
