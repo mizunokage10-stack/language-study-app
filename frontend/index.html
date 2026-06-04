@@ -444,9 +444,17 @@
 
 以下の条件に従って、必ずJSONのみを出力してください。説明文、前置き、Markdownのコードブロックは不要です。
 
-【重要】JSON文字列の中でダブルクォート（"）を使ってはいけません。explanation・explanationJa・note・instruction などの説明文中で英語フレーズや語句を引用する場合は、ダブルクォートの代わりに必ず 「 」（鍵括弧）を使ってください。
-例（正）: "explanation": "本文の冒頭で 「Outdoor drinking should be prohibited」 と述べており..."
-例（誤）: "explanation": "本文の冒頭で "Outdoor drinking should be prohibited" と述べており..."
+【重要】出力は、JSON.parseでそのまま読み込める厳密なJSONだけにしてください。
+JSONのキー名と文字列は、必ず半角ダブルクォート " で囲んでください。
+スマートクォート “ ” や ‘ ’ は絶対に使わないでください。
+Markdownのコードブロック、説明文、前置き、末尾コメントは不要です。
+
+ただし、explanation・explanationJa・note・instruction などの文字列の中で英語フレーズを引用する場合は、半角ダブルクォート " ではなく、日本語の鍵括弧 「 」 を使ってください。
+
+例：
+正: "explanation": "本文の冒頭で 「Outdoor drinking should be prohibited」 と述べており..."
+誤: "explanation": "本文の冒頭で "Outdoor drinking should be prohibited" と述べており..."
+誤: “explanation”: “本文の冒頭で 「Outdoor drinking should be prohibited」 と述べており...”
 
 {
   "type": "reading_text",

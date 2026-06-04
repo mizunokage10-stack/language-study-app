@@ -445,6 +445,60 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
+function normalizeReadingMaterialJsonText(input) {
+  let text = String(input || "")
+    .trim()
+    .replace(/^\uFEFF/, "");
+
+  const fencedBlockMatch = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fencedBlockMatch) {
+    text = fencedBlockMatch[1];
+  } else {
+    text = text
+      .replace(/^```\s*/i, "")
+      .replace(/^(?:json)\s*/i, "")
+      .replace(/\s*```$/i, "");
+  }
+
+  return text
+    .trim()
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+}
+
+function validateReadingMaterialPayload(payload) {
+  const requiredKeys = [
+    "type",
+    "title",
+    "language",
+    "level",
+    "domain",
+    "originalText",
+    "japaneseTranslation",
+    "firstReading",
+    "comprehensionQuestions",
+    "intensiveReading",
+    "rereading",
+    "oralPractice",
+    "oneSentenceOutput"
+  ];
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+
+  const hasAllRequiredKeys = requiredKeys.every((key) =>
+    Object.prototype.hasOwnProperty.call(payload, key)
+  );
+
+  return (
+    hasAllRequiredKeys &&
+    payload.type === "reading_text" &&
+    ["en", "zh"].includes(payload.language) &&
+    ["A1", "A2", "B1", "B2", "C1", "C2"].includes(payload.level)
+  );
+}
+
 function formatDate(value) {
   if (!value) {
     return "";
@@ -4201,16 +4255,21 @@ document.querySelector("#reading-material-import")?.addEventListener("click", as
   const raw = (document.querySelector("#reading-material-json")?.value || "").trim();
   if (!raw) { setStatus("JSONを貼り付けてください。"); return; }
 
+  const normalizedText = normalizeReadingMaterialJsonText(raw);
   let parsed;
   try {
-    parsed = JSON.parse(raw);
-  } catch (_) {
-    setStatus("JSONの形式が正しくありません。確認してください。", true);
+    parsed = JSON.parse(normalizedText);
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      "JSONの形式が正しくありません。半角ダブルクォート \" ではなく “ ” が使われている、末尾に余計な説明文がある、Markdownコードブロックが残っている、などの可能性があります。",
+      true
+    );
     return;
   }
 
-  if (!parsed.originalText && !parsed.title) {
-    setStatus("originalTextまたはtitleが含まれていません。", true);
+  if (!validateReadingMaterialPayload(parsed)) {
+    setStatus("JSONは読み込めましたが、教材データに必要な項目が不足しています。", true);
     return;
   }
 
