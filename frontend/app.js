@@ -93,6 +93,7 @@ const elements = {
   readingFields: document.querySelector("#reading-fields"),
   vocabBulkPaste: document.querySelector("#vocab-bulk-paste"),
   copyVocabPrompt: document.querySelector("#copy-vocab-prompt"),
+  vocabBulkMode: document.querySelector("#vocab-bulk-mode"),
   vocabBulkImport: document.querySelector("#vocab-bulk-import"),
   newLearningItem: document.querySelector("#new-learning-item"),
   speakLearningItem: document.querySelector("#speak-learning-item"),
@@ -1905,6 +1906,13 @@ function vocabularyAnswerRows(item) {
     ["場面", itemDetailValue(item, "scene", "使う場面")],
     ["領域", itemDetailValue(item, "domain", "領域")]
   ].filter(([, value]) => value);
+}
+
+function vocabularyIdentityKey(item) {
+  return [
+    normalizeLearningLanguageCode(item?.language || ""),
+    String(item?.title || "").trim().toLowerCase()
+  ].join("|");
 }
 
 function renderVocabularyAnswerDetails(item) {
@@ -4740,6 +4748,7 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   const raw = elements.vocabBulkPaste.value.trim();
   if (!raw) { setStatus("AI出力を貼り付けてください。"); return; }
   const language = elements.learningItemLanguage.value;
+  const mode = elements.vocabBulkMode?.value || "skip";
   const lines = raw.split("\n").filter(Boolean);
   const items = lines.map((line) => {
     const cols = line.split(" / ");
@@ -4769,13 +4778,47 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   if (!items.length) { setStatus("有効な単語が見つかりませんでした。「単語 / 意味 / 品詞 / ...」形式か確認してください。"); return; }
 
   await withBusy(async () => {
+    const existingData = mode === "allow"
+      ? { items: [] }
+      : await learningItemsRepository.getVocabularyItemsForLanguage(language);
+    const existingByKey = new Map(
+      (existingData.items || [])
+        .filter((item) => item.type === "vocabulary" && item.title)
+        .map((item) => [vocabularyIdentityKey(item), item])
+    );
+    const stats = { added: 0, updated: 0, skipped: 0 };
+
     for (const item of items) {
+      const key = vocabularyIdentityKey(item);
+      const existing = existingByKey.get(key);
+
+      if (existing && mode === "skip") {
+        stats.skipped += 1;
+        continue;
+      }
+
+      if (existing && mode === "update") {
+        const data = await learningItemsRepository.updateLearningItem(existing.id, {
+          ...existing,
+          ...item,
+          id: existing.id
+        });
+        if (data.item) {
+          existingByKey.set(key, data.item);
+        }
+        stats.updated += 1;
+        continue;
+      }
+
       const data = await learningItemsRepository.createLearningItem(item);
       await createInitialSrsData(data.item.id);
+      existingByKey.set(key, data.item);
+      stats.added += 1;
     }
+
     elements.vocabBulkPaste.value = "";
     await loadLearningItems();
-    setStatus(`${items.length}件の単語を一括登録しました。`);
+    setStatus(`一括登録が完了しました。追加 ${stats.added}件・更新 ${stats.updated}件・スキップ ${stats.skipped}件`);
   }, "単語を一括登録しています...");
 });
 

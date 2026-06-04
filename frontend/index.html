@@ -389,6 +389,14 @@
                       <option value="other">その他</option>
                     </select>
                   </label>
+                  <label>
+                    既存単語の扱い
+                    <select id="vocab-bulk-mode">
+                      <option value="skip">新規だけ追加（既存はスキップ）</option>
+                      <option value="update">既存は更新</option>
+                      <option value="allow">重複も追加</option>
+                    </select>
+                  </label>
                   <label>AI出力を貼り付け
                     <textarea id="vocab-bulk-paste" rows="6" placeholder="poverty / 貧困 / 名詞 / ..."></textarea>
                   </label>

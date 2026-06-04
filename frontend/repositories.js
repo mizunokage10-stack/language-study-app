@@ -263,6 +263,11 @@ export function createRepositories({
       return fetchJson(`/api/learning-items${query ? `?${query}` : ""}`);
     },
 
+    async getVocabularyItemsForLanguage(language) {
+      const params = new URLSearchParams({ type: "vocabulary", language });
+      return fetchJson(`/api/learning-items?${params}`);
+    },
+
     async createLearningItem(payload) {
       return fetchJson("/api/learning-items", {
         method: "POST",
@@ -320,6 +325,23 @@ export function createRepositories({
       }
 
       return { items: filterLearningItems((data || []).map(toLearningItem), params) };
+    },
+
+    async getVocabularyItemsForLanguage(language) {
+      const user = getSupabaseUser();
+      const { data, error } = await supabase
+        .from("learning_items")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("type", "vocabulary")
+        .eq("language", language)
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        throw new Error(formatSupabaseError("取得", error));
+      }
+
+      return { items: (data || []).map(toLearningItem) };
     },
 
     async createLearningItem(payload) {
@@ -787,6 +809,10 @@ export function createRepositories({
         shouldUseSupabase()
           ? supabaseLearningItemsRepository.createLearningItem(...args)
           : localLearningItemsRepository.createLearningItem(...args),
+      getVocabularyItemsForLanguage: (...args) =>
+        shouldUseSupabase()
+          ? supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args)
+          : localLearningItemsRepository.getVocabularyItemsForLanguage(...args),
       updateLearningItem: (...args) =>
         shouldUseSupabase()
           ? supabaseLearningItemsRepository.updateLearningItem(...args)
