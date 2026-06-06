@@ -3234,16 +3234,62 @@ function renderCourseTimer() {
 
 // ---- 単語学習クイズ ---------------------------------------------------------
 
-function shuffleArray(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function initVocabQuiz() {
+function vocabQuizWeightForItem(item, srsDataMap) {
+  const srsData = srsDataMap.get(item.id);
+  if (!srsData) {
+    return 2.25;
+  }
+
+  const reviewCount = Number(srsData.reviewCount || 0);
+  const mistakeCount = Number(srsData.mistakeCount || 0);
+  const masteryLevel = Number(srsData.masteryLevel || 0);
+
+  if (reviewCount <= 0) {
+    return 2.25;
+  }
+
+  const mistakeRate = mistakeCount / reviewCount;
+  const correctCount = Math.max(0, reviewCount - mistakeCount);
+  const lowReviewBonus = Math.max(0, 3 - reviewCount) * 0.35;
+  const mistakeBonus = mistakeRate * 3.5 + Math.min(mistakeCount, 5) * 0.25;
+  const stabilityDiscount = Math.min(correctCount, 6) * 0.12 + masteryLevel * 0.18;
+
+  return clampNumber(1 + lowReviewBonus + mistakeBonus - stabilityDiscount, 0.25, 5);
+}
+
+function weightedSampleVocabItems(items, srsItems) {
+  if (items.length <= 1) {
+    return [...items];
+  }
+
+  const srsDataMap = new Map((srsItems || []).map((item) => [item.itemId, item]));
+  const weightedItems = items.map((item) => ({
+    item,
+    weight: vocabQuizWeightForItem(item, srsDataMap)
+  }));
+
+  const queueLength = items.length;
+  const queue = [];
+
+  for (let i = 0; i < queueLength; i += 1) {
+    const totalWeight = weightedItems.reduce((sum, entry) => sum + entry.weight, 0);
+    let cursor = Math.random() * totalWeight;
+    const selected = weightedItems.find((entry) => {
+      cursor -= entry.weight;
+      return cursor <= 0;
+    }) || weightedItems[weightedItems.length - 1];
+
+    queue.push(selected.item);
+  }
+
+  return queue;
+}
+
+async function initVocabQuiz() {
   const courseLanguage = state.courseFilters.language || "";
   const items = state.learningItems.filter(
     (item) =>
@@ -3252,8 +3298,17 @@ function initVocabQuiz() {
       item.meaning &&
       (!courseLanguage || isSameLearningLanguage(item.language, courseLanguage))
   );
+
+  let srsItems = [];
+  try {
+    const data = await srsRepository.getSrsData();
+    srsItems = data.items || [];
+  } catch (_) {
+    srsItems = [];
+  }
+
   state.vocabQuiz = {
-    queue: shuffleArray(items),
+    queue: weightedSampleVocabItems(items, srsItems),
     index: 0,
     mode: "meaning",
     phase: "input"
@@ -3278,8 +3333,8 @@ function renderVocabQuizCard(container) {
         <button type="button" class="soft-button" id="vocab-quiz-restart">最初からやり直す</button>
       </div>
     `;
-    container.querySelector("#vocab-quiz-restart")?.addEventListener("click", () => {
-      initVocabQuiz();
+    container.querySelector("#vocab-quiz-restart")?.addEventListener("click", async () => {
+      await initVocabQuiz();
       renderVocabQuizCard(container);
     });
     return;
@@ -3770,9 +3825,18 @@ function renderCourseStepUi(step) {
   const srsCount = state.reviewQueue.length;
 
   if (step.type === "vocab-quiz") {
-    initVocabQuiz();
-    renderVocabQuizCard(elements.courseStepUi);
+    const stepIndex = run.currentStepIndex;
     run.renderedStepIndex = run.currentStepIndex;
+    elements.courseStepUi.innerHTML = `
+      <div class="vocab-quiz-card">
+        <p class="muted">単語学習を準備しています...</p>
+      </div>
+    `;
+    initVocabQuiz().then(() => {
+      if (state.courseRun === run && run.currentStepIndex === stepIndex) {
+        renderVocabQuizCard(elements.courseStepUi);
+      }
+    });
     return;
   }
 
