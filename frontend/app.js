@@ -1869,9 +1869,10 @@ function isSameLearningLanguage(itemLanguage, targetLanguage) {
   return normalizeLearningLanguageCode(itemLanguage) === normalizeLearningLanguageCode(targetLanguage);
 }
 
-function buildVocabularyKnowledgeNote({ pos = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
+function buildVocabularyKnowledgeNote({ pos = "", pinyin = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
   return [
     pos ? `品詞: ${pos}` : "",
+    pinyin ? `拼音: ${pinyin}` : "",
     collocation ? `コロケーション: ${collocation}` : "",
     note ? `使い方メモ: ${note}` : "",
     scene ? `使う場面: ${scene}` : "",
@@ -1898,6 +1899,7 @@ function vocabularyAnswerRows(item) {
   return [
     ["意味", item.meaning],
     ["品詞", itemDetailValue(item, "pos", "品詞")],
+    ["拼音", itemDetailValue(item, "pinyin", "拼音")],
     ["例文", item.example],
     ["例文訳", item.exampleTranslation],
     ["コロケーション", itemDetailValue(item, "collocation", "コロケーション")],
@@ -1944,9 +1946,11 @@ function sanitizeLocalLearningItem(item, existing = null) {
     title: item.title || "",
     meaning: item.meaning || "",
     pos: item.pos || "",
+    pinyin: item.pinyin || "",
     content: item.content || "",
     example: item.example || "",
     exampleTranslation: item.exampleTranslation || "",
+    examplePinyin: item.examplePinyin || "",
     note: item.note || "",
     tags: Array.isArray(item.tags) ? item.tags : [],
     createdAt: existing?.createdAt || item.createdAt || timestamp,
@@ -3672,6 +3676,7 @@ function renderReadingCourseStep(container) {
             ${ir.vocabulary.map((v) => `
               <div class="vocab-chip">
                 <strong>${escapeHtml(v.word || "")}</strong>
+                ${v.pinyin ? `<span class="muted">${escapeHtml(v.pinyin)}</span>` : ""}
                 <span class="muted">（${escapeHtml(v.partOfSpeech || "")}）</span>
                 <span>${escapeHtml(v.meaningJa || "")}</span>
                 ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
@@ -4729,6 +4734,8 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 - 品詞
 - 自然な例文
 - 例文の日本語訳
+- 中国語の場合の拼音
+- 中国語例文の拼音
 - コロケーション
 - 補足説明
 - 使われる場面
@@ -4739,7 +4746,7 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 
 以下の形式で、1単語につき1行で出力してください。
 
-単語 / 日本語訳 / 品詞 / 例文 / 例文の日本語訳 / コロケーション / 補足 / 使われる場面 / CEFR目安 / 領域
+単語 / 日本語訳 / 品詞 / 例文 / 例文の日本語訳 / 拼音 / 例文の拼音 / コロケーション / 補足 / 使われる場面 / CEFR目安 / 領域
 
 # 重要な形式ルール
 
@@ -4753,6 +4760,9 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 - 例文は、実際に日常会話・読解・作文で使いやすい自然な文にしてください。
 - 例文では、その単語がよく一緒に使われる語句、つまりコロケーションを意識してください。
 - 日本語訳は直訳ではなく、学習者が理解しやすい自然な訳にしてください。
+- 中国語の単語・表現の場合は、拼音を声調記号付きで書いてください。
+- 中国語の例文の場合は、例文全体の拼音も声調記号付きで書いてください。
+- 中国語以外の場合は、拼音と例文の拼音の欄は空欄にしてください。
 - CEFR目安は A1 / A2 / B1 / B2 / C1 / C2 のいずれかで出してください。
 - 領域は、以下の10領域から最も近いものを1つ選んでください。
 
@@ -4796,7 +4806,8 @@ make a decision, an important decision, a quick decision
 
 # 出力例
 
-apple / りんご / 名詞 / I eat an apple every morning. / 私は毎朝りんごを食べます。 / eat an apple, a red apple, apple juice / 果物を表す基本語。日常会話や食べ物の話題でよく使う。 / 食事・買い物・日常会話 / A1 / 買い物・消費
+apple / りんご / 名詞 / I eat an apple every morning. / 私は毎朝りんごを食べます。 /  /  / eat an apple, a red apple, apple juice / 果物を表す基本語。日常会話や食べ物の話題でよく使う。 / 食事・買い物・日常会話 / A1 / 買い物・消費
+学习 / 学ぶ、勉強する / 動詞 / 我每天学习中文。 / 私は毎日中国語を勉強します。 / xuéxí / Wǒ měitiān xuéxí Zhōngwén. / 学习中文, 努力学习, 学习方法 / 中国語の基本動詞。学校や独学の文脈でよく使う。 / 学習・日常会話 / A1 / 教育・連絡
 
 # 私が登録したい単語・表現
 
@@ -4817,21 +4828,26 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   const items = lines.map((line) => {
     const cols = line.split(" / ");
     const pos = (cols[2] || "").trim();
-    const collocation = (cols[5] || "").trim();
-    const note = (cols[6] || "").trim();
-    const scene = (cols[7] || "").trim();
-    const cefr = (cols[8] || "").trim();
-    const domain = (cols[9] || "").trim();
+    const hasPinyinColumns = cols.length >= 12;
+    const pinyin = hasPinyinColumns ? (cols[5] || "").trim() : "";
+    const examplePinyin = hasPinyinColumns ? (cols[6] || "").trim() : "";
+    const collocation = (cols[hasPinyinColumns ? 7 : 5] || "").trim();
+    const note = (cols[hasPinyinColumns ? 8 : 6] || "").trim();
+    const scene = (cols[hasPinyinColumns ? 9 : 7] || "").trim();
+    const cefr = (cols[hasPinyinColumns ? 10 : 8] || "").trim();
+    const domain = (cols[hasPinyinColumns ? 11 : 9] || "").trim();
     return {
       type: "vocabulary",
       language,
       title: (cols[0] || "").trim(),
       meaning: (cols[1] || "").trim(),
       pos,
+      pinyin,
       example: (cols[3] || "").trim(),
       exampleTranslation: (cols[4] || "").trim(),
+      examplePinyin,
       collocation,
-      note: buildVocabularyKnowledgeNote({ pos, collocation, note, scene, cefr, domain }),
+      note: buildVocabularyKnowledgeNote({ pos, pinyin, collocation, note, scene, cefr, domain }),
       scene,
       cefr,
       domain,
