@@ -15,6 +15,7 @@ const LISTENING_RESOURCE_CONFIG = {
 const state = {
   currentPage: "home",
   currentUser: null,
+  currentAccessToken: null,
   authReady: !supabase,
   authError: null,
   isBusy: false,
@@ -250,6 +251,9 @@ const coursePresets = [
 
 function renderAuthPanel(user) {
   state.currentUser = user || null;
+  if (!user) {
+    state.currentAccessToken = null;
+  }
   state.authReady = true;
   state.authError = null;
   document.dispatchEvent(new CustomEvent("authReady"));
@@ -268,6 +272,7 @@ function renderAuthPanel(user) {
 
 function markAuthReadyWithError(error) {
   state.currentUser = null;
+  state.currentAccessToken = null;
   state.authReady = true;
   state.authError = error || new Error("Supabase接続に失敗しました。");
   document.dispatchEvent(new CustomEvent("authReady"));
@@ -298,6 +303,7 @@ async function refreshCurrentPageAfterAuth() {
 
 async function applyAuthSession(session) {
   const user = session?.user ?? null;
+  state.currentAccessToken = session?.access_token || null;
   renderAuthPanel(user);
 
   if (user) {
@@ -480,6 +486,13 @@ async function waitForAuthReady() {
   await new Promise((resolve) => {
     document.addEventListener("authReady", resolve, { once: true });
   });
+}
+
+async function ensureAuthReadyForLearningData() {
+  await waitForAuthReady();
+  if (state.authError) {
+    throw new Error(state.authError.message || "Supabase接続に失敗しました。");
+  }
 }
 
 function canUseSupabaseUserStore() {
@@ -2424,6 +2437,7 @@ const { materialsRepository, learningItemsRepository, srsRepository, learningSes
   supabase,
   fetchJson,
   getCurrentUser: () => state.currentUser,
+  getAccessToken: () => state.currentAccessToken,
   getLearningItemFilters,
   filterLearningItems,
   tomorrowIsoDate
@@ -2723,10 +2737,7 @@ async function migrateLocalDataToSupabase(user) {
 
 async function loadLearningItems() {
   try {
-    await waitForAuthReady();
-    if (state.authError) {
-      throw new Error(state.authError.message || "Supabase接続に失敗しました。");
-    }
+    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderLearningItemTable();
@@ -2738,6 +2749,7 @@ async function loadLearningItems() {
 
 async function loadDictationPractice() {
   try {
+    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderDictationPractice(elements.dictationPractice, { context: "standalone", reset: true });
@@ -2752,6 +2764,7 @@ async function loadDictationPractice() {
 
 async function loadRecordingPractice() {
   try {
+    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderRecordingPractice(elements.recordingPractice, { context: "standalone", reset: true });
@@ -2879,6 +2892,7 @@ async function saveLearningItem(event) {
 
   const id = elements.learningItemId.value;
   await withBusy(async () => {
+    await ensureAuthReadyForLearningData();
     const data = id
       ? await learningItemsRepository.updateLearningItem(id, payload)
       : await learningItemsRepository.createLearningItem(payload);
@@ -3542,6 +3556,7 @@ async function loadDbMaterialsTab() {
 }
 
 async function importDbVocabAsLearningItem(vocab) {
+  await ensureAuthReadyForLearningData();
   const payload = {
     type: "vocabulary",
     language: normalizeLearningLanguageCode(vocab.language || state.courseFilters.language || "english"),
@@ -4360,6 +4375,7 @@ async function loadLearningItemsByIds(ids) {
   }
 
   try {
+    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItemsByIds(uniqueIds);
     return data.items || [];
   } catch (error) {
@@ -4885,6 +4901,7 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   if (!items.length) { setStatus("有効な単語が見つかりませんでした。「単語 / 意味 / 品詞 / ...」形式か確認してください。"); return; }
 
   await withBusy(async () => {
+    await ensureAuthReadyForLearningData();
     const existingData = mode === "allow"
       ? { items: [] }
       : await learningItemsRepository.getVocabularyItemsForLanguage(language);
@@ -5032,6 +5049,7 @@ async function loadVocabListPage() {
   const language = document.querySelector("#vocab-list-language")?.value || "";
 
   try {
+    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     const items = (data.items || []).filter((item) => {
       if (item.type !== "vocabulary") return false;
