@@ -16,6 +16,7 @@ const state = {
   currentPage: "home",
   currentUser: null,
   authReady: !supabase,
+  authError: null,
   isBusy: false,
   learningItems: [],
   historyItems: [],
@@ -250,6 +251,8 @@ const coursePresets = [
 function renderAuthPanel(user) {
   state.currentUser = user || null;
   state.authReady = true;
+  state.authError = null;
+  document.dispatchEvent(new CustomEvent("authReady"));
 
   if (user) {
     elements.authLoggedOut.style.display = "none";
@@ -261,6 +264,13 @@ function renderAuthPanel(user) {
     elements.authLoggedIn.style.display = "none";
     elements.authUserEmail.textContent = "";
   }
+}
+
+function markAuthReadyWithError(error) {
+  state.currentUser = null;
+  state.authReady = true;
+  state.authError = error || new Error("Supabase接続に失敗しました。");
+  document.dispatchEvent(new CustomEvent("authReady"));
 }
 
 function setAuthMessage(message, isError = false) {
@@ -394,18 +404,21 @@ function initAuth() {
   try {
     supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
-        state.authReady = true;
+        markAuthReadyWithError(error);
         setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
         return;
       }
       applyAuthSession(data.session);
+    }).catch((error) => {
+      markAuthReadyWithError(error);
+      setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
     });
 
     supabase.auth.onAuthStateChange((_event, session) => {
       applyAuthSession(session);
     });
   } catch (error) {
-    state.authReady = true;
+    markAuthReadyWithError(error);
     setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
   }
 }
@@ -457,6 +470,16 @@ function localJsonResponse(value) {
 
 function currentUserId() {
   return state.currentUser?.id || "";
+}
+
+async function waitForAuthReady() {
+  if (!supabase || state.authReady) {
+    return;
+  }
+
+  await new Promise((resolve) => {
+    document.addEventListener("authReady", resolve, { once: true });
+  });
 }
 
 function canUseSupabaseUserStore() {
@@ -2700,6 +2723,10 @@ async function migrateLocalDataToSupabase(user) {
 
 async function loadLearningItems() {
   try {
+    await waitForAuthReady();
+    if (state.authError) {
+      throw new Error(state.authError.message || "Supabase接続に失敗しました。");
+    }
     const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderLearningItemTable();

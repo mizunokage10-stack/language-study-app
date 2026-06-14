@@ -265,17 +265,6 @@ export function createRepositories({
     return user;
   }
 
-  async function withSupabaseNetworkFallback(supabaseTask, fallbackTask) {
-    try {
-      return await supabaseTask();
-    } catch (error) {
-      if (!isSupabaseNetworkError(error)) {
-        throw error;
-      }
-      return fallbackTask();
-    }
-  }
-
   async function fetchLocalJsonOrEmpty(url, emptyValue) {
     try {
       const res = await fetch(url);
@@ -841,149 +830,89 @@ export function createRepositories({
     learningItemsRepository: {
       getLearningItems: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningItemsRepository.getLearningItems(...args),
-              () => localLearningItemsRepository.getLearningItems(...args)
-            )
+          ? supabaseLearningItemsRepository.getLearningItems(...args)
           : localLearningItemsRepository.getLearningItems(...args),
       createLearningItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningItemsRepository.createLearningItem(...args),
-              () => localLearningItemsRepository.createLearningItem(...args)
-            )
+          ? supabaseLearningItemsRepository.createLearningItem(...args)
           : localLearningItemsRepository.createLearningItem(...args),
       getVocabularyItemsForLanguage: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args),
-              () => localLearningItemsRepository.getVocabularyItemsForLanguage(...args)
-            )
+          ? supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args)
           : localLearningItemsRepository.getVocabularyItemsForLanguage(...args),
       updateLearningItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningItemsRepository.updateLearningItem(...args),
-              () => localLearningItemsRepository.updateLearningItem(...args)
-            )
+          ? supabaseLearningItemsRepository.updateLearningItem(...args)
           : localLearningItemsRepository.updateLearningItem(...args),
       deleteLearningItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningItemsRepository.deleteLearningItem(...args),
-              () => localLearningItemsRepository.deleteLearningItem(...args)
-            )
+          ? supabaseLearningItemsRepository.deleteLearningItem(...args)
           : localLearningItemsRepository.deleteLearningItem(...args),
       getLearningItemsByIds: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningItemsRepository.getLearningItemsByIds(...args),
-              () => localLearningItemsRepository.getLearningItemsByIds(...args)
-            )
+          ? supabaseLearningItemsRepository.getLearningItemsByIds(...args)
           : localLearningItemsRepository.getLearningItemsByIds(...args)
     },
     srsRepository: {
       getSrsData: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseSrsRepository.getSrsData(...args),
-              () => localSrsRepository.getSrsData(...args)
-            )
+          ? supabaseSrsRepository.getSrsData(...args)
           : localSrsRepository.getSrsData(...args),
       getSrsDataForItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseSrsRepository.getSrsDataForItem(...args),
-              () => localSrsRepository.getSrsDataForItem(...args)
-            )
+          ? supabaseSrsRepository.getSrsDataForItem(...args)
           : localSrsRepository.getSrsDataForItem(...args),
       createInitialSrsData: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseSrsRepository.createInitialSrsData(...args),
-              () => localSrsRepository.createInitialSrsData(...args)
-            )
+          ? supabaseSrsRepository.createInitialSrsData(...args)
           : localSrsRepository.createInitialSrsData(...args),
       updateSrsData: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseSrsRepository.updateSrsData(...args),
-              () => localSrsRepository.updateSrsData(...args)
-            )
+          ? supabaseSrsRepository.updateSrsData(...args)
           : localSrsRepository.updateSrsData(...args),
       updateSrsAfterReview: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseSrsRepository.updateSrsAfterReview(...args),
-              () => localSrsRepository.updateSrsAfterReview(...args)
-            )
+          ? supabaseSrsRepository.updateSrsAfterReview(...args)
           : localSrsRepository.updateSrsAfterReview(...args),
       getDueReviewItems: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseSrsRepository.getDueReviewItems(...args),
-              () => localSrsRepository.getDueReviewItems(...args)
-            )
+          ? supabaseSrsRepository.getDueReviewItems(...args)
           : localSrsRepository.getDueReviewItems(...args)
     },
     learningSessionsRepository: {
       getLearningSessions: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningSessionsRepository.getLearningSessions(...args),
-              () => localLearningSessionsRepository.getLearningSessions(...args)
-            )
+          ? supabaseLearningSessionsRepository.getLearningSessions(...args)
           : localLearningSessionsRepository.getLearningSessions(...args),
       getLearningSessionById: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningSessionsRepository.getLearningSessionById(...args),
-              () => localLearningSessionsRepository.getLearningSessionById(...args)
-            )
+          ? supabaseLearningSessionsRepository.getLearningSessionById(...args)
           : localLearningSessionsRepository.getLearningSessionById(...args),
       createLearningSession: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningSessionsRepository.createLearningSession(...args),
-              () => localLearningSessionsRepository.createLearningSession(...args)
-            )
+          ? supabaseLearningSessionsRepository.createLearningSession(...args)
           : localLearningSessionsRepository.createLearningSession(...args),
       deleteLearningSession: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseLearningSessionsRepository.deleteLearningSession(...args),
-              () => localLearningSessionsRepository.deleteLearningSession(...args)
-            )
+          ? supabaseLearningSessionsRepository.deleteLearningSession(...args)
           : localLearningSessionsRepository.deleteLearningSession(...args)
     },
     studyLogsRepository: {
       getStudyLogs: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseStudyLogsRepository.getStudyLogs(...args),
-              () => localStudyLogsRepository.getStudyLogs(...args)
-            )
+          ? supabaseStudyLogsRepository.getStudyLogs(...args)
           : localStudyLogsRepository.getStudyLogs(...args),
       getStudyLogById: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseStudyLogsRepository.getStudyLogById(...args),
-              () => localStudyLogsRepository.getStudyLogById(...args)
-            )
+          ? supabaseStudyLogsRepository.getStudyLogById(...args)
           : localStudyLogsRepository.getStudyLogById(...args),
       createStudyLog: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseStudyLogsRepository.createStudyLog(...args),
-              () => localStudyLogsRepository.createStudyLog(...args)
-            )
+          ? supabaseStudyLogsRepository.createStudyLog(...args)
           : localStudyLogsRepository.createStudyLog(...args),
       deleteStudyLog: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseNetworkFallback(
-              () => supabaseStudyLogsRepository.deleteStudyLog(...args),
-              () => localStudyLogsRepository.deleteStudyLog(...args)
-            )
+          ? supabaseStudyLogsRepository.deleteStudyLog(...args)
           : localStudyLogsRepository.deleteStudyLog(...args)
     }
   };
