@@ -287,11 +287,12 @@ export function createRepositories({
     const token = await getSupabaseAccessToken();
     const response = await fetch("/api/supabase-rest", {
       method: "POST",
+      credentials: "omit",
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        accessToken: token,
         method,
         table,
         query: params ? params.toString() : "",

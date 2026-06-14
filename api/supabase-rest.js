@@ -29,16 +29,18 @@ export default async function handler(request, response) {
   const payload = typeof request.body === "string"
     ? JSON.parse(request.body || "{}")
     : request.body || {};
-  const { method = "GET", table = "", query = "", body = null, prefer = "" } = payload;
+  const { accessToken = "", method = "GET", table = "", query = "", body = null, prefer = "" } = payload;
   const normalizedMethod = String(method || "GET").toUpperCase();
 
   if (!allowedMethods.has(normalizedMethod) || !allowedTables.has(table)) {
     return sendJson(response, 400, { error: "Invalid Supabase proxy request." });
   }
 
-  const authHeader = request.headers.authorization;
+  const authHeader = accessToken
+    ? `Bearer ${accessToken}`
+    : request.headers.authorization;
   if (!authHeader || !String(authHeader).startsWith("Bearer ")) {
-    return sendJson(response, 401, { error: "Authorization header is required." });
+    return sendJson(response, 401, { error: "Supabase access token is required." });
   }
 
   const targetUrl = new URL(`/rest/v1/${table}`, supabaseUrl);
