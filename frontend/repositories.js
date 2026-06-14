@@ -2,6 +2,15 @@ function formatSupabaseError(action, error) {
   return `Supabase${action}に失敗しました: ${error.message || "詳細不明のエラー"}`;
 }
 
+function isSupabaseNetworkError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network request failed")
+  );
+}
+
 function normalizeLearningLanguage(language = "") {
   const normalized = String(language || "").toLowerCase();
   if (normalized === "en") return "english";
@@ -254,6 +263,29 @@ export function createRepositories({
     const user = getCurrentUser();
     assertSupabaseUser(user);
     return user;
+  }
+
+  async function withSupabaseNetworkFallback(supabaseTask, fallbackTask) {
+    try {
+      return await supabaseTask();
+    } catch (error) {
+      if (!isSupabaseNetworkError(error)) {
+        throw error;
+      }
+      return fallbackTask();
+    }
+  }
+
+  async function fetchLocalJsonOrEmpty(url, emptyValue) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return emptyValue;
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) return emptyValue;
+      return res.json();
+    } catch (_error) {
+      return emptyValue;
+    }
   }
 
   const localLearningItemsRepository = {
@@ -742,59 +774,65 @@ export function createRepositories({
   const materialsRepository = {
     async getVocabulary({ language, cefrLevel, domain, limit = 30 }) {
       if (supabase) {
-        let query = supabase
-          .from("vocabulary_items")
-          .select("*")
-          .eq("language", dbLangCode(language))
-          .eq("cefr_level", cefrLevel)
-          .order("id", { ascending: true })
-          .limit(limit);
-        if (domain) query = query.eq("domain", domain);
-        const { data, error } = await query;
-        if (error) throw new Error(formatSupabaseError("語彙取得", error));
-        return { items: data || [] };
+        try {
+          let query = supabase
+            .from("vocabulary_items")
+            .select("*")
+            .eq("language", dbLangCode(language))
+            .eq("cefr_level", cefrLevel)
+            .order("id", { ascending: true })
+            .limit(limit);
+          if (domain) query = query.eq("domain", domain);
+          const { data, error } = await query;
+          if (error) throw new Error(formatSupabaseError("語彙取得", error));
+          return { items: data || [] };
+        } catch (error) {
+          if (!isSupabaseNetworkError(error)) throw error;
+        }
       }
       // ローカルバックエンドへフォールバック
       const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
       if (domain) params.set("domain", domain);
-      const res = await fetch(`/api/materials/vocabulary?${params}`);
-      if (!res.ok) throw new Error(`語彙取得エラー: ${res.status}`);
-      return res.json();
+      return fetchLocalJsonOrEmpty(`/api/materials/vocabulary?${params}`, { items: [] });
     },
 
     async getReadingMaterials({ language, cefrLevel, domain, limit = 5 }) {
       if (supabase) {
-        let query = supabase
-          .from("reading_materials")
-          .select("*")
-          .eq("language", dbLangCode(language))
-          .eq("cefr_level", cefrLevel)
-          .order("id", { ascending: true })
-          .limit(limit);
-        if (domain) query = query.eq("domain", domain);
-        const { data, error } = await query;
-        if (error) throw new Error(formatSupabaseError("文章教材取得", error));
-        return { items: data || [] };
+        try {
+          let query = supabase
+            .from("reading_materials")
+            .select("*")
+            .eq("language", dbLangCode(language))
+            .eq("cefr_level", cefrLevel)
+            .order("id", { ascending: true })
+            .limit(limit);
+          if (domain) query = query.eq("domain", domain);
+          const { data, error } = await query;
+          if (error) throw new Error(formatSupabaseError("文章教材取得", error));
+          return { items: data || [] };
+        } catch (error) {
+          if (!isSupabaseNetworkError(error)) throw error;
+        }
       }
       const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
       if (domain) params.set("domain", domain);
-      const res = await fetch(`/api/materials/reading?${params}`);
-      if (!res.ok) throw new Error(`文章教材取得エラー: ${res.status}`);
-      return res.json();
+      return fetchLocalJsonOrEmpty(`/api/materials/reading?${params}`, { items: [] });
     },
 
     async getDomains() {
       if (supabase) {
-        const { data, error } = await supabase
-          .from("domains")
-          .select("id, name_ja, sort_order")
-          .order("sort_order", { ascending: true });
-        if (error) throw new Error(formatSupabaseError("領域取得", error));
-        return { domains: data || [] };
+        try {
+          const { data, error } = await supabase
+            .from("domains")
+            .select("id, name_ja, sort_order")
+            .order("sort_order", { ascending: true });
+          if (error) throw new Error(formatSupabaseError("領域取得", error));
+          return { domains: data || [] };
+        } catch (error) {
+          if (!isSupabaseNetworkError(error)) throw error;
+        }
       }
-      const res = await fetch("/api/materials/domains");
-      if (!res.ok) throw new Error(`領域取得エラー: ${res.status}`);
-      return res.json();
+      return fetchLocalJsonOrEmpty("/api/materials/domains", { domains: [] });
     }
   };
 
@@ -803,89 +841,149 @@ export function createRepositories({
     learningItemsRepository: {
       getLearningItems: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.getLearningItems(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningItemsRepository.getLearningItems(...args),
+              () => localLearningItemsRepository.getLearningItems(...args)
+            )
           : localLearningItemsRepository.getLearningItems(...args),
       createLearningItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.createLearningItem(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningItemsRepository.createLearningItem(...args),
+              () => localLearningItemsRepository.createLearningItem(...args)
+            )
           : localLearningItemsRepository.createLearningItem(...args),
       getVocabularyItemsForLanguage: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args),
+              () => localLearningItemsRepository.getVocabularyItemsForLanguage(...args)
+            )
           : localLearningItemsRepository.getVocabularyItemsForLanguage(...args),
       updateLearningItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.updateLearningItem(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningItemsRepository.updateLearningItem(...args),
+              () => localLearningItemsRepository.updateLearningItem(...args)
+            )
           : localLearningItemsRepository.updateLearningItem(...args),
       deleteLearningItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.deleteLearningItem(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningItemsRepository.deleteLearningItem(...args),
+              () => localLearningItemsRepository.deleteLearningItem(...args)
+            )
           : localLearningItemsRepository.deleteLearningItem(...args),
       getLearningItemsByIds: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.getLearningItemsByIds(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningItemsRepository.getLearningItemsByIds(...args),
+              () => localLearningItemsRepository.getLearningItemsByIds(...args)
+            )
           : localLearningItemsRepository.getLearningItemsByIds(...args)
     },
     srsRepository: {
       getSrsData: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.getSrsData(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseSrsRepository.getSrsData(...args),
+              () => localSrsRepository.getSrsData(...args)
+            )
           : localSrsRepository.getSrsData(...args),
       getSrsDataForItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.getSrsDataForItem(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseSrsRepository.getSrsDataForItem(...args),
+              () => localSrsRepository.getSrsDataForItem(...args)
+            )
           : localSrsRepository.getSrsDataForItem(...args),
       createInitialSrsData: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.createInitialSrsData(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseSrsRepository.createInitialSrsData(...args),
+              () => localSrsRepository.createInitialSrsData(...args)
+            )
           : localSrsRepository.createInitialSrsData(...args),
       updateSrsData: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.updateSrsData(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseSrsRepository.updateSrsData(...args),
+              () => localSrsRepository.updateSrsData(...args)
+            )
           : localSrsRepository.updateSrsData(...args),
       updateSrsAfterReview: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.updateSrsAfterReview(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseSrsRepository.updateSrsAfterReview(...args),
+              () => localSrsRepository.updateSrsAfterReview(...args)
+            )
           : localSrsRepository.updateSrsAfterReview(...args),
       getDueReviewItems: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.getDueReviewItems(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseSrsRepository.getDueReviewItems(...args),
+              () => localSrsRepository.getDueReviewItems(...args)
+            )
           : localSrsRepository.getDueReviewItems(...args)
     },
     learningSessionsRepository: {
       getLearningSessions: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.getLearningSessions(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningSessionsRepository.getLearningSessions(...args),
+              () => localLearningSessionsRepository.getLearningSessions(...args)
+            )
           : localLearningSessionsRepository.getLearningSessions(...args),
       getLearningSessionById: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.getLearningSessionById(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningSessionsRepository.getLearningSessionById(...args),
+              () => localLearningSessionsRepository.getLearningSessionById(...args)
+            )
           : localLearningSessionsRepository.getLearningSessionById(...args),
       createLearningSession: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.createLearningSession(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningSessionsRepository.createLearningSession(...args),
+              () => localLearningSessionsRepository.createLearningSession(...args)
+            )
           : localLearningSessionsRepository.createLearningSession(...args),
       deleteLearningSession: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.deleteLearningSession(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseLearningSessionsRepository.deleteLearningSession(...args),
+              () => localLearningSessionsRepository.deleteLearningSession(...args)
+            )
           : localLearningSessionsRepository.deleteLearningSession(...args)
     },
     studyLogsRepository: {
       getStudyLogs: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.getStudyLogs(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseStudyLogsRepository.getStudyLogs(...args),
+              () => localStudyLogsRepository.getStudyLogs(...args)
+            )
           : localStudyLogsRepository.getStudyLogs(...args),
       getStudyLogById: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.getStudyLogById(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseStudyLogsRepository.getStudyLogById(...args),
+              () => localStudyLogsRepository.getStudyLogById(...args)
+            )
           : localStudyLogsRepository.getStudyLogById(...args),
       createStudyLog: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.createStudyLog(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseStudyLogsRepository.createStudyLog(...args),
+              () => localStudyLogsRepository.createStudyLog(...args)
+            )
           : localStudyLogsRepository.createStudyLog(...args),
       deleteStudyLog: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.deleteStudyLog(...args)
+          ? withSupabaseNetworkFallback(
+              () => supabaseStudyLogsRepository.deleteStudyLog(...args),
+              () => localStudyLogsRepository.deleteStudyLog(...args)
+            )
           : localStudyLogsRepository.deleteStudyLog(...args)
     }
   };
