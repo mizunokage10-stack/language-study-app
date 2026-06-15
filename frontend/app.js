@@ -1905,10 +1905,11 @@ function isSameLearningLanguage(itemLanguage, targetLanguage) {
   return normalizeLearningLanguageCode(itemLanguage) === normalizeLearningLanguageCode(targetLanguage);
 }
 
-function buildVocabularyKnowledgeNote({ pos = "", pinyin = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
+function buildVocabularyKnowledgeNote({ pos = "", pinyin = "", examplePinyin = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
   return [
     pos ? `品詞: ${pos}` : "",
     pinyin ? `拼音: ${pinyin}` : "",
+    examplePinyin ? `例文拼音: ${examplePinyin}` : "",
     collocation ? `コロケーション: ${collocation}` : "",
     note ? `使い方メモ: ${note}` : "",
     scene ? `使う場面: ${scene}` : "",
@@ -1937,6 +1938,7 @@ function vocabularyAnswerRows(item) {
     ["品詞", itemDetailValue(item, "pos", "品詞")],
     ["拼音", itemDetailValue(item, "pinyin", "拼音")],
     ["例文", item.example],
+    ["例文拼音", itemDetailValue(item, "examplePinyin", "例文拼音")],
     ["例文訳", item.exampleTranslation],
     ["コロケーション", itemDetailValue(item, "collocation", "コロケーション")],
     ["覚えるコツ", noteValueForLabel(item.note, "使い方メモ") || item.note],
@@ -2071,7 +2073,7 @@ function filterLearningItems(items, params) {
 
       return (
         (!type || item.type === type) &&
-        (!language || item.language === language) &&
+        (!language || isSameLearningLanguage(item.language, language)) &&
         (!query || haystack.includes(query))
       );
     })
@@ -2088,7 +2090,7 @@ function filterVocabularyItems(items, params) {
       const haystack = [item.term, item.meaning, item.example, item.note].join(" ").toLowerCase();
 
       return (
-        (!language || item.language === language) &&
+        (!language || isSameLearningLanguage(item.language, language)) &&
         (!status || item.masteryStatus === status) &&
         (!query || haystack.includes(query))
       );
@@ -2301,7 +2303,7 @@ async function handleLocalJson(url, options = {}) {
   if (path === "/api/review/random" && method === "GET") {
     const language = parsedUrl.searchParams.get("language") || "";
     const candidates = readLocalCollection(localStoreKeys.notebookItems).filter(
-      (item) => (!language || item.language === language) && item.masteryStatus !== "習得済み"
+      (item) => (!language || isSameLearningLanguage(item.language, language)) && item.masteryStatus !== "習得済み"
     );
     const item = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : null;
     return localJsonResponse({ item });
@@ -3563,11 +3565,15 @@ async function importDbVocabAsLearningItem(vocab) {
     title: vocab.word || vocab.title || "",
     meaning: vocab.meaning_ja || vocab.meaning || "",
     pos: vocab.part_of_speech || vocab.partOfSpeech || "",
+    pinyin: vocab.pinyin || "",
     content: vocab.definition || vocab.content || "",
     example: vocab.example || "",
     exampleTranslation: vocab.example_ja || vocab.example_translation || "",
+    examplePinyin: vocab.example_pinyin || vocab.examplePinyin || "",
     note: buildVocabularyKnowledgeNote({
       pos: vocab.part_of_speech || vocab.partOfSpeech || "",
+      pinyin: vocab.pinyin || "",
+      examplePinyin: vocab.example_pinyin || vocab.examplePinyin || "",
       collocation: Array.isArray(vocab.collocations) ? vocab.collocations.join(", ") : vocab.collocations || vocab.collocation || "",
       note: vocab.usage_note || vocab.note || "",
       scene: vocab.scene || vocab.context || "",
@@ -4890,7 +4896,7 @@ elements.vocabBulkImport.addEventListener("click", async () => {
       exampleTranslation: (cols[4] || "").trim(),
       examplePinyin,
       collocation,
-      note: buildVocabularyKnowledgeNote({ pos, pinyin, collocation, note, scene, cefr, domain }),
+      note: buildVocabularyKnowledgeNote({ pos, pinyin, examplePinyin, collocation, note, scene, cefr, domain }),
       scene,
       cefr,
       domain,
@@ -5053,7 +5059,7 @@ async function loadVocabListPage() {
     const data = await learningItemsRepository.getLearningItems();
     const items = (data.items || []).filter((item) => {
       if (item.type !== "vocabulary") return false;
-      if (language && item.language !== language) return false;
+      if (language && !isSameLearningLanguage(item.language, language)) return false;
       if (query) {
         const haystack = [item.title, item.meaning, item.example, item.note].join(" ").toLowerCase();
         if (!haystack.includes(query)) return false;

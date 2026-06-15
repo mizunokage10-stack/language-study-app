@@ -18,6 +18,27 @@ function normalizeLearningLanguage(language = "") {
   return normalized || "english";
 }
 
+function learningLanguageDbValues(language = "") {
+  const normalized = normalizeLearningLanguage(language);
+  if (normalized === "english") return ["english", "en"];
+  if (normalized === "chinese") return ["chinese", "zh"];
+  return [normalized];
+}
+
+function learningLanguagePostgrestIn(language = "") {
+  return `in.(${learningLanguageDbValues(language).join(",")})`;
+}
+
+function noteValueForLabel(note = "", label = "") {
+  const prefix = `${label}:`;
+  return String(note || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(prefix))
+    ?.slice(prefix.length)
+    .trim() || "";
+}
+
 function assertSupabaseUser(user) {
   if (!user?.id) {
     throw new Error("認証状態を取得できませんでした。ログインし直してください。");
@@ -31,7 +52,13 @@ function toLearningItem(row) {
     language: normalizeLearningLanguage(row.language || "english"),
     title: row.title || "",
     meaning: row.meaning || "",
-    pos: row.pos || "",
+    pos: row.pos || noteValueForLabel(row.note, "品詞"),
+    pinyin: row.pinyin || noteValueForLabel(row.note, "拼音"),
+    examplePinyin: row.example_pinyin || noteValueForLabel(row.note, "例文拼音"),
+    collocation: row.collocation || noteValueForLabel(row.note, "コロケーション"),
+    scene: row.scene || noteValueForLabel(row.note, "使う場面"),
+    cefr: row.cefr || noteValueForLabel(row.note, "レベル"),
+    domain: row.domain || noteValueForLabel(row.note, "領域"),
     content: row.content || "",
     example: row.example || "",
     exampleTranslation: row.example_translation || "",
@@ -392,7 +419,7 @@ export function createRepositories({
       }
 
       if (params.get("language")) {
-        query = query.eq("language", params.get("language"));
+        query = query.in("language", learningLanguageDbValues(params.get("language")));
       }
 
       if (params.get("tag")) {
@@ -414,7 +441,7 @@ export function createRepositories({
         .select("*")
         .eq("user_id", user.id)
         .eq("type", "vocabulary")
-        .eq("language", language)
+        .in("language", learningLanguageDbValues(language))
         .order("updated_at", { ascending: false });
 
       if (error) {
@@ -500,7 +527,7 @@ export function createRepositories({
       query.set("user_id", `eq.${user.id}`);
       query.set("order", "updated_at.desc");
       if (params.get("type")) query.set("type", `eq.${params.get("type")}`);
-      if (params.get("language")) query.set("language", `eq.${params.get("language")}`);
+      if (params.get("language")) query.set("language", learningLanguagePostgrestIn(params.get("language")));
       if (params.get("tag")) query.set("tags", `cs.${JSON.stringify([params.get("tag")])}`);
 
       const data = await proxyRestRequest({ table: "learning_items", params: query });
@@ -513,7 +540,7 @@ export function createRepositories({
         select: "*",
         user_id: `eq.${user.id}`,
         type: "eq.vocabulary",
-        language: `eq.${language}`,
+        language: learningLanguagePostgrestIn(language),
         order: "updated_at.desc"
       });
       const data = await proxyRestRequest({ table: "learning_items", params });
