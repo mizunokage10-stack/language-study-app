@@ -293,11 +293,15 @@ async function refreshCurrentPageAfterAuth() {
   if (state.currentPage === "history") {
     await loadHistory();
   }
+  if (state.currentPage === "vocab-list") {
+    await loadVocabListPage();
+  }
   if (state.currentPage === "reading-list") {
     await loadReadingListPage();
   }
   if (state.currentPage === "course") {
     await loadReadingMaterialsList();
+    await loadLearningItems();
   }
 }
 
@@ -513,17 +517,28 @@ function readingMaterialSignature(item) {
     .join("|");
 }
 
+async function getSupabaseSessionToken() {
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.access_token || "";
+}
+
 async function readUserMetadata() {
   if (!canUseSupabaseUserStore()) {
     return {};
   }
 
-  const { data, error } = await supabase.auth.getUser();
-  if (error) {
-    throw new Error(error.message || "ユーザーデータの取得に失敗しました。");
-  }
+  const token = await getSupabaseSessionToken();
+  if (!token) return {};
 
-  return data.user?.user_metadata || {};
+  const response = await fetch("/api/user-data", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || "ユーザーデータの取得に失敗しました。");
+  }
+  const data = await response.json();
+  return data.user_metadata || {};
 }
 
 async function readSupabaseReadingMaterials() {
@@ -533,16 +548,29 @@ async function readSupabaseReadingMaterials() {
 }
 
 async function writeSupabaseReadingMaterials(items) {
+  if (!canUseSupabaseUserStore()) return;
+
+  const token = await getSupabaseSessionToken();
+  if (!token) throw new Error("ログインが必要です。");
+
   const metadata = await readUserMetadata();
-  const { error } = await supabase.auth.updateUser({
-    data: {
-      ...metadata,
-      [userStoreKeys.readingMaterials]: items
-    }
+  const response = await fetch("/api/user-data", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      user_metadata: {
+        ...metadata,
+        [userStoreKeys.readingMaterials]: items
+      }
+    })
   });
 
-  if (error) {
-    throw new Error(error.message || "文章教材の保存に失敗しました。");
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || "文章教材の保存に失敗しました。");
   }
 }
 
@@ -2840,6 +2868,7 @@ function fillLearningItemForm(item) {
     elements.learningItemTitle.value = item.title || "";
     elements.learningItemMeaning.value = item.meaning || "";
     elements.learningItemPos.value = item.pos || "";
+    elements.learningItemNote.value = item.note || "";
     elements.learningItemExample.value = item.example || "";
     elements.learningItemExampleTranslation.value = item.exampleTranslation || "";
     elements.learningItemTags.value = formatTags(item.tags);
@@ -2867,14 +2896,17 @@ function buildLearningItemPayload() {
       tags: parseTags(elements.learningItemTagsReading.value)
     };
   }
+  const pos = elements.learningItemPos.value.trim();
+  const existingNote = elements.learningItemNote.value.trim();
   return {
     type: "vocabulary",
     language: elements.learningItemLanguage.value,
     title: elements.learningItemTitle.value.trim(),
     meaning: elements.learningItemMeaning.value.trim(),
-    pos: elements.learningItemPos.value.trim(),
+    pos,
     example: elements.learningItemExample.value.trim(),
     exampleTranslation: elements.learningItemExampleTranslation.value.trim(),
+    note: existingNote,
     tags: parseTags(elements.learningItemTags.value)
   };
 }
