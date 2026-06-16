@@ -2,6 +2,10 @@ function formatSupabaseError(action, error) {
   return `Supabase${action}に失敗しました: ${error.message || "詳細不明のエラー"}`;
 }
 
+function logRepositoryWarning(scope, detail = {}) {
+  console.warn(`[language-study] ${scope}`, detail);
+}
+
 function isSupabaseNetworkError(error) {
   const message = String(error?.message || error || "").toLowerCase();
   return (
@@ -334,6 +338,12 @@ export function createRepositories({
 
     if (!response.ok) {
       const message = typeof data === "string" ? data : data?.message || data?.error;
+      logRepositoryWarning("Supabase REST proxy request failed", {
+        method,
+        table,
+        status: response.status,
+        body: typeof message === "string" ? message.slice(0, 240) : ""
+      });
       throw new Error(message || formatSupabaseError("取得", { message: `proxy ${response.status}` }));
     }
 
@@ -345,9 +355,22 @@ export function createRepositories({
       return await supabaseTask();
     } catch (error) {
       if (!isSupabaseNetworkError(error)) {
+        logRepositoryWarning("Supabase SDK request failed", {
+          message: error.message || String(error)
+        });
         throw error;
       }
-      return proxyTask();
+      logRepositoryWarning("Supabase SDK network error; trying REST proxy", {
+        message: error.message || String(error)
+      });
+      try {
+        return await proxyTask();
+      } catch (proxyError) {
+        logRepositoryWarning("Supabase REST proxy fallback failed", {
+          message: proxyError.message || String(proxyError)
+        });
+        throw proxyError;
+      }
     }
   }
 

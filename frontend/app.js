@@ -478,6 +478,14 @@ function localJsonResponse(value) {
   return structuredClone(value);
 }
 
+function logStorageFallback(scope, detail = {}) {
+  console.warn(`[language-study] ${scope}: localStorage fallback`, detail);
+}
+
+function logApiDebug(scope, detail = {}) {
+  console.warn(`[language-study] ${scope}`, detail);
+}
+
 function currentUserId() {
   return state.currentUser?.id || "";
 }
@@ -530,15 +538,35 @@ async function readUserMetadata() {
   const token = await getSupabaseSessionToken();
   if (!token) return {};
 
-  const response = await fetch("/api/user-data", {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || "ユーザーデータの取得に失敗しました。");
+  try {
+    const response = await fetch("/api/user-data", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const responseText = await response.text();
+    const data = responseText ? JSON.parse(responseText) : {};
+
+    if (!response.ok) {
+      logApiDebug("user metadata proxy read failed", {
+        url: "/api/user-data",
+        status: response.status,
+        body: data?.error || data?.message || responseText.slice(0, 240)
+      });
+      throw new Error(data.error || "ユーザーデータの取得に失敗しました。");
+    }
+
+    return data.user_metadata || {};
+  } catch (error) {
+    logApiDebug("user metadata proxy unavailable; using Supabase SDK", {
+      message: error.message || String(error)
+    });
   }
-  const data = await response.json();
-  return data.user_metadata || {};
+
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error) {
+    throw new Error(error.message || "ユーザーデータの取得に失敗しました。");
+  }
+
+  return data.user?.user_metadata || {};
 }
 
 async function readSupabaseReadingMaterials() {
@@ -554,23 +582,41 @@ async function writeSupabaseReadingMaterials(items) {
   if (!token) throw new Error("ログインが必要です。");
 
   const metadata = await readUserMetadata();
-  const response = await fetch("/api/user-data", {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      user_metadata: {
-        ...metadata,
-        [userStoreKeys.readingMaterials]: items
-      }
-    })
-  });
+  const user_metadata = {
+    ...metadata,
+    [userStoreKeys.readingMaterials]: items
+  };
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || "文章教材の保存に失敗しました。");
+  try {
+    const response = await fetch("/api/user-data", {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ user_metadata })
+    });
+    const responseText = await response.text();
+    const data = responseText ? JSON.parse(responseText) : {};
+
+    if (!response.ok) {
+      logApiDebug("user metadata proxy write failed", {
+        url: "/api/user-data",
+        status: response.status,
+        body: data?.error || data?.message || responseText.slice(0, 240)
+      });
+      throw new Error(data.error || "文章教材の保存に失敗しました。");
+    }
+    return;
+  } catch (error) {
+    logApiDebug("user metadata proxy unavailable; using Supabase SDK", {
+      message: error.message || String(error)
+    });
+  }
+
+  const { error } = await supabase.auth.updateUser({ data: user_metadata });
+  if (error) {
+    throw new Error(error.message || "文章教材の保存に失敗しました。");
   }
 }
 
@@ -1869,7 +1915,13 @@ async function fetchJson(url, options = {}) {
     return handleSupabaseReadingMaterials(url, options);
   }
 
+  if (parsedUrl.pathname.startsWith("/api/reading-materials")) {
+    logStorageFallback("reading materials unauthenticated", { method: options.method || "GET", path: parsedUrl.pathname });
+    return handleLocalJson(url, options);
+  }
+
   if (shouldUseLocalStorageBackend()) {
+    logStorageFallback("static backend", { method: options.method || "GET", path: parsedUrl.pathname });
     return handleLocalJson(url, options);
   }
 
@@ -1880,6 +1932,12 @@ async function fetchJson(url, options = {}) {
     : { error: await response.text() };
 
   if (!response.ok) {
+    logApiDebug("api request failed", {
+      method: options.method || "GET",
+      url,
+      status: response.status,
+      body: typeof data.error === "string" ? data.error.slice(0, 240) : ""
+    });
     throw new Error(data.error || "通信に失敗しました。");
   }
 
