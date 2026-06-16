@@ -15,9 +15,7 @@ const LISTENING_RESOURCE_CONFIG = {
 const state = {
   currentPage: "home",
   currentUser: null,
-  currentAccessToken: null,
   authReady: !supabase,
-  authError: null,
   isBusy: false,
   learningItems: [],
   historyItems: [],
@@ -251,12 +249,7 @@ const coursePresets = [
 
 function renderAuthPanel(user) {
   state.currentUser = user || null;
-  if (!user) {
-    state.currentAccessToken = null;
-  }
   state.authReady = true;
-  state.authError = null;
-  document.dispatchEvent(new CustomEvent("authReady"));
 
   if (user) {
     elements.authLoggedOut.style.display = "none";
@@ -268,14 +261,6 @@ function renderAuthPanel(user) {
     elements.authLoggedIn.style.display = "none";
     elements.authUserEmail.textContent = "";
   }
-}
-
-function markAuthReadyWithError(error) {
-  state.currentUser = null;
-  state.currentAccessToken = null;
-  state.authReady = true;
-  state.authError = error || new Error("Supabase接続に失敗しました。");
-  document.dispatchEvent(new CustomEvent("authReady"));
 }
 
 function setAuthMessage(message, isError = false) {
@@ -293,21 +278,16 @@ async function refreshCurrentPageAfterAuth() {
   if (state.currentPage === "history") {
     await loadHistory();
   }
-  if (state.currentPage === "vocab-list") {
-    await loadVocabListPage();
-  }
   if (state.currentPage === "reading-list") {
     await loadReadingListPage();
   }
   if (state.currentPage === "course") {
     await loadReadingMaterialsList();
-    await loadLearningItems();
   }
 }
 
 async function applyAuthSession(session) {
   const user = session?.user ?? null;
-  state.currentAccessToken = session?.access_token || null;
   renderAuthPanel(user);
 
   if (user) {
@@ -414,21 +394,18 @@ function initAuth() {
   try {
     supabase.auth.getSession().then(({ data, error }) => {
       if (error) {
-        markAuthReadyWithError(error);
+        state.authReady = true;
         setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
         return;
       }
       applyAuthSession(data.session);
-    }).catch((error) => {
-      markAuthReadyWithError(error);
-      setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
     });
 
     supabase.auth.onAuthStateChange((_event, session) => {
       applyAuthSession(session);
     });
   } catch (error) {
-    markAuthReadyWithError(error);
+    state.authReady = true;
     setAuthMessage(error.message || "Supabase接続に失敗しました。", true);
   }
 }
@@ -478,33 +455,8 @@ function localJsonResponse(value) {
   return structuredClone(value);
 }
 
-function logStorageFallback(scope, detail = {}) {
-  console.warn(`[language-study] ${scope}: localStorage fallback`, detail);
-}
-
-function logApiDebug(scope, detail = {}) {
-  console.warn(`[language-study] ${scope}`, detail);
-}
-
 function currentUserId() {
   return state.currentUser?.id || "";
-}
-
-async function waitForAuthReady() {
-  if (!supabase || state.authReady) {
-    return;
-  }
-
-  await new Promise((resolve) => {
-    document.addEventListener("authReady", resolve, { once: true });
-  });
-}
-
-async function ensureAuthReadyForLearningData() {
-  await waitForAuthReady();
-  if (state.authError) {
-    throw new Error(state.authError.message || "Supabase接続に失敗しました。");
-  }
 }
 
 function canUseSupabaseUserStore() {
@@ -525,43 +477,12 @@ function readingMaterialSignature(item) {
     .join("|");
 }
 
-async function getSupabaseSessionToken() {
-  const { data } = await supabase.auth.getSession();
-  return data?.session?.access_token || "";
-}
-
 async function readUserMetadata() {
   if (!canUseSupabaseUserStore()) {
     return {};
   }
 
-  const token = await getSupabaseSessionToken();
-  if (!token) return {};
-
-  try {
-    const response = await fetch("/api/user-data", {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const responseText = await response.text();
-    const data = responseText ? JSON.parse(responseText) : {};
-
-    if (!response.ok) {
-      logApiDebug("user metadata proxy read failed", {
-        url: "/api/user-data",
-        status: response.status,
-        body: data?.error || data?.message || responseText.slice(0, 240)
-      });
-      throw new Error(data.error || "ユーザーデータの取得に失敗しました。");
-    }
-
-    return data.user_metadata || {};
-  } catch (error) {
-    logApiDebug("user metadata proxy unavailable; using Supabase SDK", {
-      message: error.message || String(error)
-    });
-  }
-
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await supabase.auth.getUser();
   if (error) {
     throw new Error(error.message || "ユーザーデータの取得に失敗しました。");
   }
@@ -576,45 +497,14 @@ async function readSupabaseReadingMaterials() {
 }
 
 async function writeSupabaseReadingMaterials(items) {
-  if (!canUseSupabaseUserStore()) return;
-
-  const token = await getSupabaseSessionToken();
-  if (!token) throw new Error("ログインが必要です。");
-
   const metadata = await readUserMetadata();
-  const user_metadata = {
-    ...metadata,
-    [userStoreKeys.readingMaterials]: items
-  };
-
-  try {
-    const response = await fetch("/api/user-data", {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ user_metadata })
-    });
-    const responseText = await response.text();
-    const data = responseText ? JSON.parse(responseText) : {};
-
-    if (!response.ok) {
-      logApiDebug("user metadata proxy write failed", {
-        url: "/api/user-data",
-        status: response.status,
-        body: data?.error || data?.message || responseText.slice(0, 240)
-      });
-      throw new Error(data.error || "文章教材の保存に失敗しました。");
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      ...metadata,
+      [userStoreKeys.readingMaterials]: items
     }
-    return;
-  } catch (error) {
-    logApiDebug("user metadata proxy unavailable; using Supabase SDK", {
-      message: error.message || String(error)
-    });
-  }
+  });
 
-  const { error } = await supabase.auth.updateUser({ data: user_metadata });
   if (error) {
     throw new Error(error.message || "文章教材の保存に失敗しました。");
   }
@@ -1915,13 +1805,7 @@ async function fetchJson(url, options = {}) {
     return handleSupabaseReadingMaterials(url, options);
   }
 
-  if (parsedUrl.pathname.startsWith("/api/reading-materials")) {
-    logStorageFallback("reading materials unauthenticated", { method: options.method || "GET", path: parsedUrl.pathname });
-    return handleLocalJson(url, options);
-  }
-
   if (shouldUseLocalStorageBackend()) {
-    logStorageFallback("static backend", { method: options.method || "GET", path: parsedUrl.pathname });
     return handleLocalJson(url, options);
   }
 
@@ -1932,12 +1816,6 @@ async function fetchJson(url, options = {}) {
     : { error: await response.text() };
 
   if (!response.ok) {
-    logApiDebug("api request failed", {
-      method: options.method || "GET",
-      url,
-      status: response.status,
-      body: typeof data.error === "string" ? data.error.slice(0, 240) : ""
-    });
     throw new Error(data.error || "通信に失敗しました。");
   }
 
@@ -1991,11 +1869,9 @@ function isSameLearningLanguage(itemLanguage, targetLanguage) {
   return normalizeLearningLanguageCode(itemLanguage) === normalizeLearningLanguageCode(targetLanguage);
 }
 
-function buildVocabularyKnowledgeNote({ pos = "", pinyin = "", examplePinyin = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
+function buildVocabularyKnowledgeNote({ pos = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
   return [
     pos ? `品詞: ${pos}` : "",
-    pinyin ? `拼音: ${pinyin}` : "",
-    examplePinyin ? `例文拼音: ${examplePinyin}` : "",
     collocation ? `コロケーション: ${collocation}` : "",
     note ? `使い方メモ: ${note}` : "",
     scene ? `使う場面: ${scene}` : "",
@@ -2022,9 +1898,7 @@ function vocabularyAnswerRows(item) {
   return [
     ["意味", item.meaning],
     ["品詞", itemDetailValue(item, "pos", "品詞")],
-    ["拼音", itemDetailValue(item, "pinyin", "拼音")],
     ["例文", item.example],
-    ["例文拼音", itemDetailValue(item, "examplePinyin", "例文拼音")],
     ["例文訳", item.exampleTranslation],
     ["コロケーション", itemDetailValue(item, "collocation", "コロケーション")],
     ["覚えるコツ", noteValueForLabel(item.note, "使い方メモ") || item.note],
@@ -2070,11 +1944,9 @@ function sanitizeLocalLearningItem(item, existing = null) {
     title: item.title || "",
     meaning: item.meaning || "",
     pos: item.pos || "",
-    pinyin: item.pinyin || "",
     content: item.content || "",
     example: item.example || "",
     exampleTranslation: item.exampleTranslation || "",
-    examplePinyin: item.examplePinyin || "",
     note: item.note || "",
     tags: Array.isArray(item.tags) ? item.tags : [],
     createdAt: existing?.createdAt || item.createdAt || timestamp,
@@ -2159,7 +2031,7 @@ function filterLearningItems(items, params) {
 
       return (
         (!type || item.type === type) &&
-        (!language || isSameLearningLanguage(item.language, language)) &&
+        (!language || item.language === language) &&
         (!query || haystack.includes(query))
       );
     })
@@ -2176,7 +2048,7 @@ function filterVocabularyItems(items, params) {
       const haystack = [item.term, item.meaning, item.example, item.note].join(" ").toLowerCase();
 
       return (
-        (!language || isSameLearningLanguage(item.language, language)) &&
+        (!language || item.language === language) &&
         (!status || item.masteryStatus === status) &&
         (!query || haystack.includes(query))
       );
@@ -2389,7 +2261,7 @@ async function handleLocalJson(url, options = {}) {
   if (path === "/api/review/random" && method === "GET") {
     const language = parsedUrl.searchParams.get("language") || "";
     const candidates = readLocalCollection(localStoreKeys.notebookItems).filter(
-      (item) => (!language || isSameLearningLanguage(item.language, language)) && item.masteryStatus !== "習得済み"
+      (item) => (!language || item.language === language) && item.masteryStatus !== "習得済み"
     );
     const item = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : null;
     return localJsonResponse({ item });
@@ -2525,7 +2397,6 @@ const { materialsRepository, learningItemsRepository, srsRepository, learningSes
   supabase,
   fetchJson,
   getCurrentUser: () => state.currentUser,
-  getAccessToken: () => state.currentAccessToken,
   getLearningItemFilters,
   filterLearningItems,
   tomorrowIsoDate
@@ -2825,7 +2696,6 @@ async function migrateLocalDataToSupabase(user) {
 
 async function loadLearningItems() {
   try {
-    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderLearningItemTable();
@@ -2837,7 +2707,6 @@ async function loadLearningItems() {
 
 async function loadDictationPractice() {
   try {
-    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderDictationPractice(elements.dictationPractice, { context: "standalone", reset: true });
@@ -2852,7 +2721,6 @@ async function loadDictationPractice() {
 
 async function loadRecordingPractice() {
   try {
-    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     state.learningItems = data.items || [];
     renderRecordingPractice(elements.recordingPractice, { context: "standalone", reset: true });
@@ -2926,7 +2794,6 @@ function fillLearningItemForm(item) {
     elements.learningItemTitle.value = item.title || "";
     elements.learningItemMeaning.value = item.meaning || "";
     elements.learningItemPos.value = item.pos || "";
-    elements.learningItemNote.value = item.note || "";
     elements.learningItemExample.value = item.example || "";
     elements.learningItemExampleTranslation.value = item.exampleTranslation || "";
     elements.learningItemTags.value = formatTags(item.tags);
@@ -2954,17 +2821,14 @@ function buildLearningItemPayload() {
       tags: parseTags(elements.learningItemTagsReading.value)
     };
   }
-  const pos = elements.learningItemPos.value.trim();
-  const existingNote = elements.learningItemNote.value.trim();
   return {
     type: "vocabulary",
     language: elements.learningItemLanguage.value,
     title: elements.learningItemTitle.value.trim(),
     meaning: elements.learningItemMeaning.value.trim(),
-    pos,
+    pos: elements.learningItemPos.value.trim(),
     example: elements.learningItemExample.value.trim(),
     exampleTranslation: elements.learningItemExampleTranslation.value.trim(),
-    note: existingNote,
     tags: parseTags(elements.learningItemTags.value)
   };
 }
@@ -2984,7 +2848,6 @@ async function saveLearningItem(event) {
 
   const id = elements.learningItemId.value;
   await withBusy(async () => {
-    await ensureAuthReadyForLearningData();
     const data = id
       ? await learningItemsRepository.updateLearningItem(id, payload)
       : await learningItemsRepository.createLearningItem(payload);
@@ -3648,22 +3511,17 @@ async function loadDbMaterialsTab() {
 }
 
 async function importDbVocabAsLearningItem(vocab) {
-  await ensureAuthReadyForLearningData();
   const payload = {
     type: "vocabulary",
     language: normalizeLearningLanguageCode(vocab.language || state.courseFilters.language || "english"),
     title: vocab.word || vocab.title || "",
     meaning: vocab.meaning_ja || vocab.meaning || "",
     pos: vocab.part_of_speech || vocab.partOfSpeech || "",
-    pinyin: vocab.pinyin || "",
     content: vocab.definition || vocab.content || "",
     example: vocab.example || "",
     exampleTranslation: vocab.example_ja || vocab.example_translation || "",
-    examplePinyin: vocab.example_pinyin || vocab.examplePinyin || "",
     note: buildVocabularyKnowledgeNote({
       pos: vocab.part_of_speech || vocab.partOfSpeech || "",
-      pinyin: vocab.pinyin || "",
-      examplePinyin: vocab.example_pinyin || vocab.examplePinyin || "",
       collocation: Array.isArray(vocab.collocations) ? vocab.collocations.join(", ") : vocab.collocations || vocab.collocation || "",
       note: vocab.usage_note || vocab.note || "",
       scene: vocab.scene || vocab.context || "",
@@ -3814,7 +3672,6 @@ function renderReadingCourseStep(container) {
             ${ir.vocabulary.map((v) => `
               <div class="vocab-chip">
                 <strong>${escapeHtml(v.word || "")}</strong>
-                ${v.pinyin ? `<span class="muted">${escapeHtml(v.pinyin)}</span>` : ""}
                 <span class="muted">（${escapeHtml(v.partOfSpeech || "")}）</span>
                 <span>${escapeHtml(v.meaningJa || "")}</span>
                 ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
@@ -4471,7 +4328,6 @@ async function loadLearningItemsByIds(ids) {
   }
 
   try {
-    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItemsByIds(uniqueIds);
     return data.items || [];
   } catch (error) {
@@ -4873,8 +4729,6 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 - 品詞
 - 自然な例文
 - 例文の日本語訳
-- 中国語の場合の拼音
-- 中国語例文の拼音
 - コロケーション
 - 補足説明
 - 使われる場面
@@ -4885,7 +4739,7 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 
 以下の形式で、1単語につき1行で出力してください。
 
-単語 / 日本語訳 / 品詞 / 例文 / 例文の日本語訳 / 拼音 / 例文の拼音 / コロケーション / 補足 / 使われる場面 / CEFR目安 / 領域
+単語 / 日本語訳 / 品詞 / 例文 / 例文の日本語訳 / コロケーション / 補足 / 使われる場面 / CEFR目安 / 領域
 
 # 重要な形式ルール
 
@@ -4899,9 +4753,6 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 - 例文は、実際に日常会話・読解・作文で使いやすい自然な文にしてください。
 - 例文では、その単語がよく一緒に使われる語句、つまりコロケーションを意識してください。
 - 日本語訳は直訳ではなく、学習者が理解しやすい自然な訳にしてください。
-- 中国語の単語・表現の場合は、拼音を声調記号付きで書いてください。
-- 中国語の例文の場合は、例文全体の拼音も声調記号付きで書いてください。
-- 中国語以外の場合は、拼音と例文の拼音の欄は空欄にしてください。
 - CEFR目安は A1 / A2 / B1 / B2 / C1 / C2 のいずれかで出してください。
 - 領域は、以下の10領域から最も近いものを1つ選んでください。
 
@@ -4945,8 +4796,7 @@ make a decision, an important decision, a quick decision
 
 # 出力例
 
-apple / りんご / 名詞 / I eat an apple every morning. / 私は毎朝りんごを食べます。 /  /  / eat an apple, a red apple, apple juice / 果物を表す基本語。日常会話や食べ物の話題でよく使う。 / 食事・買い物・日常会話 / A1 / 買い物・消費
-学习 / 学ぶ、勉強する / 動詞 / 我每天学习中文。 / 私は毎日中国語を勉強します。 / xuéxí / Wǒ měitiān xuéxí Zhōngwén. / 学习中文, 努力学习, 学习方法 / 中国語の基本動詞。学校や独学の文脈でよく使う。 / 学習・日常会話 / A1 / 教育・連絡
+apple / りんご / 名詞 / I eat an apple every morning. / 私は毎朝りんごを食べます。 / eat an apple, a red apple, apple juice / 果物を表す基本語。日常会話や食べ物の話題でよく使う。 / 食事・買い物・日常会話 / A1 / 買い物・消費
 
 # 私が登録したい単語・表現
 
@@ -4967,26 +4817,21 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   const items = lines.map((line) => {
     const cols = line.split(" / ");
     const pos = (cols[2] || "").trim();
-    const hasPinyinColumns = cols.length >= 12;
-    const pinyin = hasPinyinColumns ? (cols[5] || "").trim() : "";
-    const examplePinyin = hasPinyinColumns ? (cols[6] || "").trim() : "";
-    const collocation = (cols[hasPinyinColumns ? 7 : 5] || "").trim();
-    const note = (cols[hasPinyinColumns ? 8 : 6] || "").trim();
-    const scene = (cols[hasPinyinColumns ? 9 : 7] || "").trim();
-    const cefr = (cols[hasPinyinColumns ? 10 : 8] || "").trim();
-    const domain = (cols[hasPinyinColumns ? 11 : 9] || "").trim();
+    const collocation = (cols[5] || "").trim();
+    const note = (cols[6] || "").trim();
+    const scene = (cols[7] || "").trim();
+    const cefr = (cols[8] || "").trim();
+    const domain = (cols[9] || "").trim();
     return {
       type: "vocabulary",
       language,
       title: (cols[0] || "").trim(),
       meaning: (cols[1] || "").trim(),
       pos,
-      pinyin,
       example: (cols[3] || "").trim(),
       exampleTranslation: (cols[4] || "").trim(),
-      examplePinyin,
       collocation,
-      note: buildVocabularyKnowledgeNote({ pos, pinyin, examplePinyin, collocation, note, scene, cefr, domain }),
+      note: buildVocabularyKnowledgeNote({ pos, collocation, note, scene, cefr, domain }),
       scene,
       cefr,
       domain,
@@ -4997,7 +4842,6 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   if (!items.length) { setStatus("有効な単語が見つかりませんでした。「単語 / 意味 / 品詞 / ...」形式か確認してください。"); return; }
 
   await withBusy(async () => {
-    await ensureAuthReadyForLearningData();
     const existingData = mode === "allow"
       ? { items: [] }
       : await learningItemsRepository.getVocabularyItemsForLanguage(language);
@@ -5145,11 +4989,10 @@ async function loadVocabListPage() {
   const language = document.querySelector("#vocab-list-language")?.value || "";
 
   try {
-    await ensureAuthReadyForLearningData();
     const data = await learningItemsRepository.getLearningItems();
     const items = (data.items || []).filter((item) => {
       if (item.type !== "vocabulary") return false;
-      if (language && !isSameLearningLanguage(item.language, language)) return false;
+      if (language && item.language !== language) return false;
       if (query) {
         const haystack = [item.title, item.meaning, item.example, item.note].join(" ").toLowerCase();
         if (!haystack.includes(query)) return false;

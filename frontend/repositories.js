@@ -2,45 +2,11 @@ function formatSupabaseError(action, error) {
   return `Supabase${action}に失敗しました: ${error.message || "詳細不明のエラー"}`;
 }
 
-function logRepositoryWarning(scope, detail = {}) {
-  console.warn(`[language-study] ${scope}`, detail);
-}
-
-function isSupabaseNetworkError(error) {
-  const message = String(error?.message || error || "").toLowerCase();
-  return (
-    message.includes("failed to fetch") ||
-    message.includes("networkerror") ||
-    message.includes("network request failed")
-  );
-}
-
 function normalizeLearningLanguage(language = "") {
   const normalized = String(language || "").toLowerCase();
   if (normalized === "en") return "english";
   if (normalized === "zh") return "chinese";
   return normalized || "english";
-}
-
-function learningLanguageDbValues(language = "") {
-  const normalized = normalizeLearningLanguage(language);
-  if (normalized === "english") return ["english", "en"];
-  if (normalized === "chinese") return ["chinese", "zh"];
-  return [normalized];
-}
-
-function learningLanguagePostgrestIn(language = "") {
-  return `in.(${learningLanguageDbValues(language).join(",")})`;
-}
-
-function noteValueForLabel(note = "", label = "") {
-  const prefix = `${label}:`;
-  return String(note || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.startsWith(prefix))
-    ?.slice(prefix.length)
-    .trim() || "";
 }
 
 function assertSupabaseUser(user) {
@@ -56,13 +22,7 @@ function toLearningItem(row) {
     language: normalizeLearningLanguage(row.language || "english"),
     title: row.title || "",
     meaning: row.meaning || "",
-    pos: row.pos || noteValueForLabel(row.note, "品詞"),
-    pinyin: row.pinyin || noteValueForLabel(row.note, "拼音"),
-    examplePinyin: row.example_pinyin || noteValueForLabel(row.note, "例文拼音"),
-    collocation: row.collocation || noteValueForLabel(row.note, "コロケーション"),
-    scene: row.scene || noteValueForLabel(row.note, "使う場面"),
-    cefr: row.cefr || noteValueForLabel(row.note, "レベル"),
-    domain: row.domain || noteValueForLabel(row.note, "領域"),
+    pos: row.pos || "",
     content: row.content || "",
     example: row.example || "",
     exampleTranslation: row.example_translation || "",
@@ -282,7 +242,6 @@ export function createRepositories({
   supabase,
   fetchJson,
   getCurrentUser,
-  getAccessToken = () => "",
   getLearningItemFilters,
   filterLearningItems,
   tomorrowIsoDate
@@ -295,95 +254,6 @@ export function createRepositories({
     const user = getCurrentUser();
     assertSupabaseUser(user);
     return user;
-  }
-
-  async function getSupabaseAccessToken() {
-    const currentToken = getAccessToken();
-    if (currentToken) {
-      return currentToken;
-    }
-
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      throw new Error(formatSupabaseError("認証情報取得", error));
-    }
-    const token = data?.session?.access_token;
-    if (!token) {
-      throw new Error("Supabase認証情報を取得できませんでした。ログインし直してください。");
-    }
-    return token;
-  }
-
-  async function proxyRestRequest({ method = "GET", table, params, body, prefer }) {
-    const token = await getSupabaseAccessToken();
-    const response = await fetch("/api/supabase-rest", {
-      method: "POST",
-      credentials: "omit",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        accessToken: token,
-        method,
-        table,
-        query: params ? params.toString() : "",
-        body,
-        prefer
-      })
-    });
-    const contentType = response.headers.get("content-type") || "";
-    const data = contentType.includes("application/json")
-      ? await response.json()
-      : await response.text();
-
-    if (!response.ok) {
-      const message = typeof data === "string" ? data : data?.message || data?.error;
-      logRepositoryWarning("Supabase REST proxy request failed", {
-        method,
-        table,
-        status: response.status,
-        body: typeof message === "string" ? message.slice(0, 240) : ""
-      });
-      throw new Error(message || formatSupabaseError("取得", { message: `proxy ${response.status}` }));
-    }
-
-    return data;
-  }
-
-  async function withSupabaseProxyFallback(supabaseTask, proxyTask) {
-    try {
-      return await supabaseTask();
-    } catch (error) {
-      if (!isSupabaseNetworkError(error)) {
-        logRepositoryWarning("Supabase SDK request failed", {
-          message: error.message || String(error)
-        });
-        throw error;
-      }
-      logRepositoryWarning("Supabase SDK network error; trying REST proxy", {
-        message: error.message || String(error)
-      });
-      try {
-        return await proxyTask();
-      } catch (proxyError) {
-        logRepositoryWarning("Supabase REST proxy fallback failed", {
-          message: proxyError.message || String(proxyError)
-        });
-        throw proxyError;
-      }
-    }
-  }
-
-  async function fetchLocalJsonOrEmpty(url, emptyValue) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) return emptyValue;
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) return emptyValue;
-      return res.json();
-    } catch (_error) {
-      return emptyValue;
-    }
   }
 
   const localLearningItemsRepository = {
@@ -442,7 +312,7 @@ export function createRepositories({
       }
 
       if (params.get("language")) {
-        query = query.in("language", learningLanguageDbValues(params.get("language")));
+        query = query.eq("language", params.get("language"));
       }
 
       if (params.get("tag")) {
@@ -464,7 +334,7 @@ export function createRepositories({
         .select("*")
         .eq("user_id", user.id)
         .eq("type", "vocabulary")
-        .in("language", learningLanguageDbValues(language))
+        .eq("language", language)
         .order("updated_at", { ascending: false });
 
       if (error) {
@@ -537,88 +407,6 @@ export function createRepositories({
         throw new Error(formatSupabaseError("取得", error));
       }
 
-      return { items: (data || []).map(toLearningItem) };
-    }
-  };
-
-  const proxyLearningItemsRepository = {
-    async getLearningItems() {
-      const user = getSupabaseUser();
-      const params = getLearningItemFilters();
-      const query = new URLSearchParams();
-      query.set("select", "*");
-      query.set("user_id", `eq.${user.id}`);
-      query.set("order", "updated_at.desc");
-      if (params.get("type")) query.set("type", `eq.${params.get("type")}`);
-      if (params.get("language")) query.set("language", learningLanguagePostgrestIn(params.get("language")));
-      if (params.get("tag")) query.set("tags", `cs.${JSON.stringify([params.get("tag")])}`);
-
-      const data = await proxyRestRequest({ table: "learning_items", params: query });
-      return { items: filterLearningItems((data || []).map(toLearningItem), params) };
-    },
-
-    async getVocabularyItemsForLanguage(language) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        user_id: `eq.${user.id}`,
-        type: "eq.vocabulary",
-        language: learningLanguagePostgrestIn(language),
-        order: "updated_at.desc"
-      });
-      const data = await proxyRestRequest({ table: "learning_items", params });
-      return { items: (data || []).map(toLearningItem) };
-    },
-
-    async createLearningItem(payload) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({ select: "*" });
-      const data = await proxyRestRequest({
-        method: "POST",
-        table: "learning_items",
-        params,
-        body: toLearningItemRow(payload, user.id),
-        prefer: "return=representation"
-      });
-      return { item: toLearningItem(Array.isArray(data) ? data[0] : data) };
-    },
-
-    async updateLearningItem(id, payload) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        id: `eq.${id}`,
-        user_id: `eq.${user.id}`
-      });
-      const data = await proxyRestRequest({
-        method: "PATCH",
-        table: "learning_items",
-        params,
-        body: toLearningItemRow(payload, user.id),
-        prefer: "return=representation"
-      });
-      return { item: toLearningItem(Array.isArray(data) ? data[0] : data) };
-    },
-
-    async deleteLearningItem(id) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        id: `eq.${id}`,
-        user_id: `eq.${user.id}`
-      });
-      await proxyRestRequest({ method: "DELETE", table: "learning_items", params });
-      return { ok: true };
-    },
-
-    async getLearningItemsByIds(ids) {
-      const user = getSupabaseUser();
-      if (!ids.length) return { items: [] };
-      const params = new URLSearchParams({
-        select: "*",
-        user_id: `eq.${user.id}`,
-        id: `in.(${ids.join(",")})`
-      });
-      const data = await proxyRestRequest({ table: "learning_items", params });
       return { items: (data || []).map(toLearningItem) };
     }
   };
@@ -773,87 +561,6 @@ export function createRepositories({
     }
   };
 
-  const proxySrsRepository = {
-    async getSrsData() {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        user_id: `eq.${user.id}`,
-        order: "updated_at.desc"
-      });
-      const data = await proxyRestRequest({ table: "srs_data", params });
-      return { items: (data || []).map(toSrsData) };
-    },
-
-    async getSrsDataForItem(itemId) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        item_id: `eq.${itemId}`,
-        user_id: `eq.${user.id}`,
-        limit: "1"
-      });
-      const data = await proxyRestRequest({ table: "srs_data", params });
-      const row = Array.isArray(data) ? data[0] : null;
-      return { item: row ? toSrsData(row) : null };
-    },
-
-    async createInitialSrsData(itemId) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({ select: "*" });
-      const data = await proxyRestRequest({
-        method: "POST",
-        table: "srs_data",
-        params,
-        body: toSrsDataRow(
-          {
-            itemId,
-            nextReviewDate: tomorrowIsoDate(),
-            interval: 1,
-            easeFactor: 2.5,
-            reviewCount: 0,
-            mistakeCount: 0,
-            lastReviewedAt: "",
-            masteryLevel: 0
-          },
-          user.id
-        ),
-        prefer: "return=representation"
-      });
-      return { item: toSrsData(Array.isArray(data) ? data[0] : data) };
-    },
-
-    async updateSrsData(itemId, patch) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        item_id: `eq.${itemId}`,
-        user_id: `eq.${user.id}`
-      });
-      const data = await proxyRestRequest({
-        method: "PATCH",
-        table: "srs_data",
-        params,
-        body: toSrsDataPatch(patch),
-        prefer: "return=representation"
-      });
-      return { item: toSrsData(Array.isArray(data) ? data[0] : data) };
-    },
-
-    async updateSrsAfterReview(itemId, outcome) {
-      const { item } = await this.getSrsDataForItem(itemId);
-      if (!item) throw new Error("SRSデータが見つかりません。");
-      return this.updateSrsData(itemId, calculateSrsAfterReview(item, outcome));
-    },
-
-    async getDueReviewItems() {
-      const { items: srsItems } = await this.getSrsData();
-      const itemIds = srsItems.map((item) => item.itemId);
-      const { items: learningItems } = await proxyLearningItemsRepository.getLearningItemsByIds(itemIds);
-      return { items: joinDueReviewItems(learningItems, srsItems) };
-    }
-  };
-
   const localLearningSessionsRepository = {
     async getLearningSessions() {
       return fetchJson("/api/learning-sessions");
@@ -937,55 +644,6 @@ export function createRepositories({
         throw new Error(formatSupabaseError("削除", error));
       }
 
-      return { ok: true };
-    }
-  };
-
-  const proxyLearningSessionsRepository = {
-    async getLearningSessions() {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        user_id: `eq.${user.id}`,
-        order: "date.desc"
-      });
-      const data = await proxyRestRequest({ table: "learning_sessions", params });
-      return { items: (data || []).map(toLearningSession) };
-    },
-
-    async getLearningSessionById(id) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        id: `eq.${id}`,
-        user_id: `eq.${user.id}`,
-        limit: "1"
-      });
-      const data = await proxyRestRequest({ table: "learning_sessions", params });
-      const row = Array.isArray(data) ? data[0] : null;
-      return { item: row ? toLearningSession(row) : null };
-    },
-
-    async createLearningSession(payload) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({ select: "*" });
-      const data = await proxyRestRequest({
-        method: "POST",
-        table: "learning_sessions",
-        params,
-        body: toLearningSessionRow(payload, user.id),
-        prefer: "return=representation"
-      });
-      return { item: toLearningSession(Array.isArray(data) ? data[0] : data) };
-    },
-
-    async deleteLearningSession(id) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        id: `eq.${id}`,
-        user_id: `eq.${user.id}`
-      });
-      await proxyRestRequest({ method: "DELETE", table: "learning_sessions", params });
       return { ok: true };
     }
   };
@@ -1077,55 +735,6 @@ export function createRepositories({
     }
   };
 
-  const proxyStudyLogsRepository = {
-    async getStudyLogs() {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        user_id: `eq.${user.id}`,
-        order: "date.desc"
-      });
-      const data = await proxyRestRequest({ table: "study_logs", params });
-      return { items: (data || []).map(toStudyLog) };
-    },
-
-    async getStudyLogById(id) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        select: "*",
-        id: `eq.${id}`,
-        user_id: `eq.${user.id}`,
-        limit: "1"
-      });
-      const data = await proxyRestRequest({ table: "study_logs", params });
-      const row = Array.isArray(data) ? data[0] : null;
-      return { item: row ? toStudyLog(row) : null };
-    },
-
-    async createStudyLog(payload) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({ select: "*" });
-      const data = await proxyRestRequest({
-        method: "POST",
-        table: "study_logs",
-        params,
-        body: toStudyLogRow(payload, user.id),
-        prefer: "return=representation"
-      });
-      return { item: toStudyLog(Array.isArray(data) ? data[0] : data) };
-    },
-
-    async deleteStudyLog(id) {
-      const user = getSupabaseUser();
-      const params = new URLSearchParams({
-        id: `eq.${id}`,
-        user_id: `eq.${user.id}`
-      });
-      await proxyRestRequest({ method: "DELETE", table: "study_logs", params });
-      return { ok: true };
-    }
-  };
-
   // ---- 教材リポジトリ（RLS読み取り専用 / anon key で OK / ユーザー認証不要） --------
 
   const dbLangCode = (lang) => ({ english: "en", chinese: "zh" }[lang] ?? lang);
@@ -1133,65 +742,59 @@ export function createRepositories({
   const materialsRepository = {
     async getVocabulary({ language, cefrLevel, domain, limit = 30 }) {
       if (supabase) {
-        try {
-          let query = supabase
-            .from("vocabulary_items")
-            .select("*")
-            .eq("language", dbLangCode(language))
-            .eq("cefr_level", cefrLevel)
-            .order("id", { ascending: true })
-            .limit(limit);
-          if (domain) query = query.eq("domain", domain);
-          const { data, error } = await query;
-          if (error) throw new Error(formatSupabaseError("語彙取得", error));
-          return { items: data || [] };
-        } catch (error) {
-          if (!isSupabaseNetworkError(error)) throw error;
-        }
+        let query = supabase
+          .from("vocabulary_items")
+          .select("*")
+          .eq("language", dbLangCode(language))
+          .eq("cefr_level", cefrLevel)
+          .order("id", { ascending: true })
+          .limit(limit);
+        if (domain) query = query.eq("domain", domain);
+        const { data, error } = await query;
+        if (error) throw new Error(formatSupabaseError("語彙取得", error));
+        return { items: data || [] };
       }
       // ローカルバックエンドへフォールバック
       const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
       if (domain) params.set("domain", domain);
-      return fetchLocalJsonOrEmpty(`/api/materials/vocabulary?${params}`, { items: [] });
+      const res = await fetch(`/api/materials/vocabulary?${params}`);
+      if (!res.ok) throw new Error(`語彙取得エラー: ${res.status}`);
+      return res.json();
     },
 
     async getReadingMaterials({ language, cefrLevel, domain, limit = 5 }) {
       if (supabase) {
-        try {
-          let query = supabase
-            .from("reading_materials")
-            .select("*")
-            .eq("language", dbLangCode(language))
-            .eq("cefr_level", cefrLevel)
-            .order("id", { ascending: true })
-            .limit(limit);
-          if (domain) query = query.eq("domain", domain);
-          const { data, error } = await query;
-          if (error) throw new Error(formatSupabaseError("文章教材取得", error));
-          return { items: data || [] };
-        } catch (error) {
-          if (!isSupabaseNetworkError(error)) throw error;
-        }
+        let query = supabase
+          .from("reading_materials")
+          .select("*")
+          .eq("language", dbLangCode(language))
+          .eq("cefr_level", cefrLevel)
+          .order("id", { ascending: true })
+          .limit(limit);
+        if (domain) query = query.eq("domain", domain);
+        const { data, error } = await query;
+        if (error) throw new Error(formatSupabaseError("文章教材取得", error));
+        return { items: data || [] };
       }
       const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
       if (domain) params.set("domain", domain);
-      return fetchLocalJsonOrEmpty(`/api/materials/reading?${params}`, { items: [] });
+      const res = await fetch(`/api/materials/reading?${params}`);
+      if (!res.ok) throw new Error(`文章教材取得エラー: ${res.status}`);
+      return res.json();
     },
 
     async getDomains() {
       if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from("domains")
-            .select("id, name_ja, sort_order")
-            .order("sort_order", { ascending: true });
-          if (error) throw new Error(formatSupabaseError("領域取得", error));
-          return { domains: data || [] };
-        } catch (error) {
-          if (!isSupabaseNetworkError(error)) throw error;
-        }
+        const { data, error } = await supabase
+          .from("domains")
+          .select("id, name_ja, sort_order")
+          .order("sort_order", { ascending: true });
+        if (error) throw new Error(formatSupabaseError("領域取得", error));
+        return { domains: data || [] };
       }
-      return fetchLocalJsonOrEmpty("/api/materials/domains", { domains: [] });
+      const res = await fetch("/api/materials/domains");
+      if (!res.ok) throw new Error(`領域取得エラー: ${res.status}`);
+      return res.json();
     }
   };
 
@@ -1200,149 +803,89 @@ export function createRepositories({
     learningItemsRepository: {
       getLearningItems: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningItemsRepository.getLearningItems(...args),
-              () => proxyLearningItemsRepository.getLearningItems(...args)
-            )
+          ? supabaseLearningItemsRepository.getLearningItems(...args)
           : localLearningItemsRepository.getLearningItems(...args),
       createLearningItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningItemsRepository.createLearningItem(...args),
-              () => proxyLearningItemsRepository.createLearningItem(...args)
-            )
+          ? supabaseLearningItemsRepository.createLearningItem(...args)
           : localLearningItemsRepository.createLearningItem(...args),
       getVocabularyItemsForLanguage: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args),
-              () => proxyLearningItemsRepository.getVocabularyItemsForLanguage(...args)
-            )
+          ? supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args)
           : localLearningItemsRepository.getVocabularyItemsForLanguage(...args),
       updateLearningItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningItemsRepository.updateLearningItem(...args),
-              () => proxyLearningItemsRepository.updateLearningItem(...args)
-            )
+          ? supabaseLearningItemsRepository.updateLearningItem(...args)
           : localLearningItemsRepository.updateLearningItem(...args),
       deleteLearningItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningItemsRepository.deleteLearningItem(...args),
-              () => proxyLearningItemsRepository.deleteLearningItem(...args)
-            )
+          ? supabaseLearningItemsRepository.deleteLearningItem(...args)
           : localLearningItemsRepository.deleteLearningItem(...args),
       getLearningItemsByIds: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningItemsRepository.getLearningItemsByIds(...args),
-              () => proxyLearningItemsRepository.getLearningItemsByIds(...args)
-            )
+          ? supabaseLearningItemsRepository.getLearningItemsByIds(...args)
           : localLearningItemsRepository.getLearningItemsByIds(...args)
     },
     srsRepository: {
       getSrsData: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseSrsRepository.getSrsData(...args),
-              () => proxySrsRepository.getSrsData(...args)
-            )
+          ? supabaseSrsRepository.getSrsData(...args)
           : localSrsRepository.getSrsData(...args),
       getSrsDataForItem: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseSrsRepository.getSrsDataForItem(...args),
-              () => proxySrsRepository.getSrsDataForItem(...args)
-            )
+          ? supabaseSrsRepository.getSrsDataForItem(...args)
           : localSrsRepository.getSrsDataForItem(...args),
       createInitialSrsData: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseSrsRepository.createInitialSrsData(...args),
-              () => proxySrsRepository.createInitialSrsData(...args)
-            )
+          ? supabaseSrsRepository.createInitialSrsData(...args)
           : localSrsRepository.createInitialSrsData(...args),
       updateSrsData: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseSrsRepository.updateSrsData(...args),
-              () => proxySrsRepository.updateSrsData(...args)
-            )
+          ? supabaseSrsRepository.updateSrsData(...args)
           : localSrsRepository.updateSrsData(...args),
       updateSrsAfterReview: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseSrsRepository.updateSrsAfterReview(...args),
-              () => proxySrsRepository.updateSrsAfterReview(...args)
-            )
+          ? supabaseSrsRepository.updateSrsAfterReview(...args)
           : localSrsRepository.updateSrsAfterReview(...args),
       getDueReviewItems: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseSrsRepository.getDueReviewItems(...args),
-              () => proxySrsRepository.getDueReviewItems(...args)
-            )
+          ? supabaseSrsRepository.getDueReviewItems(...args)
           : localSrsRepository.getDueReviewItems(...args)
     },
     learningSessionsRepository: {
       getLearningSessions: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningSessionsRepository.getLearningSessions(...args),
-              () => proxyLearningSessionsRepository.getLearningSessions(...args)
-            )
+          ? supabaseLearningSessionsRepository.getLearningSessions(...args)
           : localLearningSessionsRepository.getLearningSessions(...args),
       getLearningSessionById: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningSessionsRepository.getLearningSessionById(...args),
-              () => proxyLearningSessionsRepository.getLearningSessionById(...args)
-            )
+          ? supabaseLearningSessionsRepository.getLearningSessionById(...args)
           : localLearningSessionsRepository.getLearningSessionById(...args),
       createLearningSession: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningSessionsRepository.createLearningSession(...args),
-              () => proxyLearningSessionsRepository.createLearningSession(...args)
-            )
+          ? supabaseLearningSessionsRepository.createLearningSession(...args)
           : localLearningSessionsRepository.createLearningSession(...args),
       deleteLearningSession: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseLearningSessionsRepository.deleteLearningSession(...args),
-              () => proxyLearningSessionsRepository.deleteLearningSession(...args)
-            )
+          ? supabaseLearningSessionsRepository.deleteLearningSession(...args)
           : localLearningSessionsRepository.deleteLearningSession(...args)
     },
     studyLogsRepository: {
       getStudyLogs: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseStudyLogsRepository.getStudyLogs(...args),
-              () => proxyStudyLogsRepository.getStudyLogs(...args)
-            )
+          ? supabaseStudyLogsRepository.getStudyLogs(...args)
           : localStudyLogsRepository.getStudyLogs(...args),
       getStudyLogById: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseStudyLogsRepository.getStudyLogById(...args),
-              () => proxyStudyLogsRepository.getStudyLogById(...args)
-            )
+          ? supabaseStudyLogsRepository.getStudyLogById(...args)
           : localStudyLogsRepository.getStudyLogById(...args),
       createStudyLog: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseStudyLogsRepository.createStudyLog(...args),
-              () => proxyStudyLogsRepository.createStudyLog(...args)
-            )
+          ? supabaseStudyLogsRepository.createStudyLog(...args)
           : localStudyLogsRepository.createStudyLog(...args),
       deleteStudyLog: (...args) =>
         shouldUseSupabase()
-          ? withSupabaseProxyFallback(
-              () => supabaseStudyLogsRepository.deleteStudyLog(...args),
-              () => proxyStudyLogsRepository.deleteStudyLog(...args)
-            )
+          ? supabaseStudyLogsRepository.deleteStudyLog(...args)
           : localStudyLogsRepository.deleteStudyLog(...args)
     }
   };

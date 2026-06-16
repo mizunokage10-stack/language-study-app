@@ -15,11 +15,9 @@
  * @property {LearningLanguage} language
  * @property {string} title
  * @property {string} meaning
- * @property {string} pinyin
  * @property {string} content
  * @property {string} example
  * @property {string} exampleTranslation
- * @property {string} examplePinyin
  * @property {string} note
  * @property {string[]} tags
  * @property {string} createdAt

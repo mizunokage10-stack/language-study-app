@@ -441,9 +441,9 @@
                 <button type="button" id="reading-material-import">登録</button>
               </div>
               <details style="margin-top:1.5rem">
-                <summary class="muted" style="cursor:pointer">ChatGPT / Claude用プロンプトを表示</summary>
+                <summary class="muted" style="cursor:pointer">ChatGPT用プロンプトを表示</summary>
                 <div class="chatgpt-prompt-box">
-                  <p class="muted" style="margin-bottom:0.5rem">以下をコピーして、ChatGPT / Claudeに貼り付け後、末尾に文章を追加してください。</p>
+                  <p class="muted" style="margin-bottom:0.5rem">以下をコピーして、ChatGPTに貼り付け後、末尾に文章を追加してください。</p>
                   <button type="button" id="copy-reading-prompt" class="soft-button">プロンプトをコピー</button>
                   <pre id="reading-prompt-text" style="display:none">以下の文章を、言語学習アプリの読解パートに登録できる教材JSONに変換してください。
 
@@ -480,7 +480,7 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
     { "question": "", "choices": ["", "", ""], "answer": "", "explanation": "" }
   ],
   "intensiveReading": {
-    "vocabulary": [{ "word": "", "pinyin": "", "meaningJa": "", "partOfSpeech": "", "note": "" }],
+    "vocabulary": [{ "word": "", "meaningJa": "", "partOfSpeech": "", "note": "" }],
     "chunks": [{ "chunk": "", "meaningJa": "", "note": "" }],
     "grammarPoints": [{ "title": "", "explanationJa": "", "example": "" }],
     "notes": [""]
@@ -492,8 +492,6 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
 
 ※ language は英語なら "en"、中国語なら "zh" を使ってください。
 ※ level は CEFR レベル（A1 / A2 / B1 / B2 / C1）を使ってください。
-※ 中国語の文章では、originalText は簡体字または繁体字の本文、japaneseTranslation は日本語訳にし、intensiveReading.vocabulary の各語彙には必ず声調記号付きの pinyin を入れてください。
-※ 中国語以外の文章では、intensiveReading.vocabulary の pinyin は空文字 "" にしてください。
 
 変換する文章：</pre>
                 </div>
