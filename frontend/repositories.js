@@ -15,6 +15,22 @@ function assertSupabaseUser(user) {
   }
 }
 
+const learningItemColumns = [
+  "id",
+  "user_id",
+  "type",
+  "language",
+  "title",
+  "meaning",
+  "content",
+  "example",
+  "example_translation",
+  "note",
+  "tags",
+  "created_at",
+  "updated_at"
+].join(",");
+
 function toLearningItem(row) {
   return {
     id: row.id,
@@ -22,7 +38,6 @@ function toLearningItem(row) {
     language: normalizeLearningLanguage(row.language || "english"),
     title: row.title || "",
     meaning: row.meaning || "",
-    pos: row.pos || "",
     content: row.content || "",
     example: row.example || "",
     exampleTranslation: row.example_translation || "",
@@ -242,18 +257,47 @@ export function createRepositories({
   supabase,
   fetchJson,
   getCurrentUser,
+  isSupabaseDisabled = () => false,
+  onSupabaseUnavailable = () => {},
   getLearningItemFilters,
   filterLearningItems,
   tomorrowIsoDate
 }) {
   function shouldUseSupabase() {
-    return Boolean(supabase && getCurrentUser()?.id);
+    return Boolean(supabase && !isSupabaseDisabled() && getCurrentUser()?.id);
+  }
+
+  function shouldUseSupabaseMaterials() {
+    return Boolean(supabase && !isSupabaseDisabled());
   }
 
   function getSupabaseUser() {
     const user = getCurrentUser();
     assertSupabaseUser(user);
     return user;
+  }
+
+  function isSupabaseNetworkError(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return (
+      error instanceof TypeError ||
+      message.includes("failed to fetch") ||
+      message.includes("load failed") ||
+      message.includes("networkerror") ||
+      message.includes("cors")
+    );
+  }
+
+  async function runSupabaseOrLocal(supabaseTask, localTask) {
+    try {
+      return await supabaseTask();
+    } catch (error) {
+      if (!isSupabaseNetworkError(error)) {
+        throw error;
+      }
+      onSupabaseUnavailable(error);
+      return localTask();
+    }
   }
 
   const localLearningItemsRepository = {
@@ -303,7 +347,7 @@ export function createRepositories({
       const params = getLearningItemFilters();
       let query = supabase
         .from("learning_items")
-        .select("*")
+        .select(learningItemColumns)
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
 
@@ -331,7 +375,7 @@ export function createRepositories({
       const user = getSupabaseUser();
       const { data, error } = await supabase
         .from("learning_items")
-        .select("*")
+        .select(learningItemColumns)
         .eq("user_id", user.id)
         .eq("type", "vocabulary")
         .eq("language", language)
@@ -349,7 +393,7 @@ export function createRepositories({
       const { data, error } = await supabase
         .from("learning_items")
         .insert(toLearningItemRow(payload, user.id))
-        .select("*")
+        .select(learningItemColumns)
         .single();
 
       if (error) {
@@ -366,7 +410,7 @@ export function createRepositories({
         .update(toLearningItemRow(payload, user.id))
         .eq("id", id)
         .eq("user_id", user.id)
-        .select("*")
+        .select(learningItemColumns)
         .single();
 
       if (error) {
@@ -399,7 +443,7 @@ export function createRepositories({
 
       const { data, error } = await supabase
         .from("learning_items")
-        .select("*")
+        .select(learningItemColumns)
         .eq("user_id", user.id)
         .in("id", ids);
 
@@ -741,60 +785,86 @@ export function createRepositories({
 
   const materialsRepository = {
     async getVocabulary({ language, cefrLevel, domain, limit = 30 }) {
-      if (supabase) {
-        let query = supabase
-          .from("vocabulary_items")
-          .select("*")
-          .eq("language", dbLangCode(language))
-          .eq("cefr_level", cefrLevel)
-          .order("id", { ascending: true })
-          .limit(limit);
-        if (domain) query = query.eq("domain", domain);
-        const { data, error } = await query;
-        if (error) throw new Error(formatSupabaseError("語彙取得", error));
-        return { items: data || [] };
+      const fetchLocal = async () => {
+        const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
+        if (domain) params.set("domain", domain);
+        const res = await fetch(`/api/materials/vocabulary?${params}`);
+        if (!res.ok) throw new Error(`語彙取得エラー: ${res.status}`);
+        return res.json();
+      };
+
+      if (!shouldUseSupabaseMaterials()) {
+        return fetchLocal();
       }
-      // ローカルバックエンドへフォールバック
-      const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
-      if (domain) params.set("domain", domain);
-      const res = await fetch(`/api/materials/vocabulary?${params}`);
-      if (!res.ok) throw new Error(`語彙取得エラー: ${res.status}`);
-      return res.json();
+
+      return runSupabaseOrLocal(async () => {
+          let query = supabase
+            .from("vocabulary_items")
+            .select("*")
+            .eq("language", dbLangCode(language))
+            .eq("cefr_level", cefrLevel)
+            .order("id", { ascending: true })
+            .limit(limit);
+          if (domain) query = query.eq("domain", domain);
+          const { data, error } = await query;
+          if (error) throw new Error(formatSupabaseError("語彙取得", error));
+          return { items: data || [] };
+        },
+        fetchLocal
+      );
     },
 
     async getReadingMaterials({ language, cefrLevel, domain, limit = 5 }) {
-      if (supabase) {
-        let query = supabase
-          .from("reading_materials")
-          .select("*")
-          .eq("language", dbLangCode(language))
-          .eq("cefr_level", cefrLevel)
-          .order("id", { ascending: true })
-          .limit(limit);
-        if (domain) query = query.eq("domain", domain);
-        const { data, error } = await query;
-        if (error) throw new Error(formatSupabaseError("文章教材取得", error));
-        return { items: data || [] };
+      const fetchLocal = async () => {
+        const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
+        if (domain) params.set("domain", domain);
+        const res = await fetch(`/api/materials/reading?${params}`);
+        if (!res.ok) throw new Error(`文章教材取得エラー: ${res.status}`);
+        return res.json();
+      };
+
+      if (!shouldUseSupabaseMaterials()) {
+        return fetchLocal();
       }
-      const params = new URLSearchParams({ language: dbLangCode(language), cefr_level: cefrLevel, limit: String(limit) });
-      if (domain) params.set("domain", domain);
-      const res = await fetch(`/api/materials/reading?${params}`);
-      if (!res.ok) throw new Error(`文章教材取得エラー: ${res.status}`);
-      return res.json();
+
+      return runSupabaseOrLocal(async () => {
+          let query = supabase
+            .from("reading_materials")
+            .select("*")
+            .eq("language", dbLangCode(language))
+            .eq("cefr_level", cefrLevel)
+            .order("id", { ascending: true })
+            .limit(limit);
+          if (domain) query = query.eq("domain", domain);
+          const { data, error } = await query;
+          if (error) throw new Error(formatSupabaseError("文章教材取得", error));
+          return { items: data || [] };
+        },
+        fetchLocal
+      );
     },
 
     async getDomains() {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from("domains")
-          .select("id, name_ja, sort_order")
-          .order("sort_order", { ascending: true });
-        if (error) throw new Error(formatSupabaseError("領域取得", error));
-        return { domains: data || [] };
+      const fetchLocal = async () => {
+        const res = await fetch("/api/materials/domains");
+        if (!res.ok) throw new Error(`領域取得エラー: ${res.status}`);
+        return res.json();
+      };
+
+      if (!shouldUseSupabaseMaterials()) {
+        return fetchLocal();
       }
-      const res = await fetch("/api/materials/domains");
-      if (!res.ok) throw new Error(`領域取得エラー: ${res.status}`);
-      return res.json();
+
+      return runSupabaseOrLocal(async () => {
+          const { data, error } = await supabase
+            .from("domains")
+            .select("id, name_ja, sort_order")
+            .order("sort_order", { ascending: true });
+          if (error) throw new Error(formatSupabaseError("領域取得", error));
+          return { domains: data || [] };
+        },
+        fetchLocal
+      );
     }
   };
 
@@ -803,89 +873,149 @@ export function createRepositories({
     learningItemsRepository: {
       getLearningItems: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.getLearningItems(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningItemsRepository.getLearningItems(...args),
+              () => localLearningItemsRepository.getLearningItems(...args)
+            )
           : localLearningItemsRepository.getLearningItems(...args),
       createLearningItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.createLearningItem(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningItemsRepository.createLearningItem(...args),
+              () => localLearningItemsRepository.createLearningItem(...args)
+            )
           : localLearningItemsRepository.createLearningItem(...args),
       getVocabularyItemsForLanguage: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningItemsRepository.getVocabularyItemsForLanguage(...args),
+              () => localLearningItemsRepository.getVocabularyItemsForLanguage(...args)
+            )
           : localLearningItemsRepository.getVocabularyItemsForLanguage(...args),
       updateLearningItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.updateLearningItem(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningItemsRepository.updateLearningItem(...args),
+              () => localLearningItemsRepository.updateLearningItem(...args)
+            )
           : localLearningItemsRepository.updateLearningItem(...args),
       deleteLearningItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.deleteLearningItem(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningItemsRepository.deleteLearningItem(...args),
+              () => localLearningItemsRepository.deleteLearningItem(...args)
+            )
           : localLearningItemsRepository.deleteLearningItem(...args),
       getLearningItemsByIds: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningItemsRepository.getLearningItemsByIds(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningItemsRepository.getLearningItemsByIds(...args),
+              () => localLearningItemsRepository.getLearningItemsByIds(...args)
+            )
           : localLearningItemsRepository.getLearningItemsByIds(...args)
     },
     srsRepository: {
       getSrsData: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.getSrsData(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseSrsRepository.getSrsData(...args),
+              () => localSrsRepository.getSrsData(...args)
+            )
           : localSrsRepository.getSrsData(...args),
       getSrsDataForItem: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.getSrsDataForItem(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseSrsRepository.getSrsDataForItem(...args),
+              () => localSrsRepository.getSrsDataForItem(...args)
+            )
           : localSrsRepository.getSrsDataForItem(...args),
       createInitialSrsData: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.createInitialSrsData(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseSrsRepository.createInitialSrsData(...args),
+              () => localSrsRepository.createInitialSrsData(...args)
+            )
           : localSrsRepository.createInitialSrsData(...args),
       updateSrsData: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.updateSrsData(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseSrsRepository.updateSrsData(...args),
+              () => localSrsRepository.updateSrsData(...args)
+            )
           : localSrsRepository.updateSrsData(...args),
       updateSrsAfterReview: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.updateSrsAfterReview(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseSrsRepository.updateSrsAfterReview(...args),
+              () => localSrsRepository.updateSrsAfterReview(...args)
+            )
           : localSrsRepository.updateSrsAfterReview(...args),
       getDueReviewItems: (...args) =>
         shouldUseSupabase()
-          ? supabaseSrsRepository.getDueReviewItems(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseSrsRepository.getDueReviewItems(...args),
+              () => localSrsRepository.getDueReviewItems(...args)
+            )
           : localSrsRepository.getDueReviewItems(...args)
     },
     learningSessionsRepository: {
       getLearningSessions: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.getLearningSessions(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningSessionsRepository.getLearningSessions(...args),
+              () => localLearningSessionsRepository.getLearningSessions(...args)
+            )
           : localLearningSessionsRepository.getLearningSessions(...args),
       getLearningSessionById: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.getLearningSessionById(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningSessionsRepository.getLearningSessionById(...args),
+              () => localLearningSessionsRepository.getLearningSessionById(...args)
+            )
           : localLearningSessionsRepository.getLearningSessionById(...args),
       createLearningSession: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.createLearningSession(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningSessionsRepository.createLearningSession(...args),
+              () => localLearningSessionsRepository.createLearningSession(...args)
+            )
           : localLearningSessionsRepository.createLearningSession(...args),
       deleteLearningSession: (...args) =>
         shouldUseSupabase()
-          ? supabaseLearningSessionsRepository.deleteLearningSession(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseLearningSessionsRepository.deleteLearningSession(...args),
+              () => localLearningSessionsRepository.deleteLearningSession(...args)
+            )
           : localLearningSessionsRepository.deleteLearningSession(...args)
     },
     studyLogsRepository: {
       getStudyLogs: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.getStudyLogs(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseStudyLogsRepository.getStudyLogs(...args),
+              () => localStudyLogsRepository.getStudyLogs(...args)
+            )
           : localStudyLogsRepository.getStudyLogs(...args),
       getStudyLogById: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.getStudyLogById(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseStudyLogsRepository.getStudyLogById(...args),
+              () => localStudyLogsRepository.getStudyLogById(...args)
+            )
           : localStudyLogsRepository.getStudyLogById(...args),
       createStudyLog: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.createStudyLog(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseStudyLogsRepository.createStudyLog(...args),
+              () => localStudyLogsRepository.createStudyLog(...args)
+            )
           : localStudyLogsRepository.createStudyLog(...args),
       deleteStudyLog: (...args) =>
         shouldUseSupabase()
-          ? supabaseStudyLogsRepository.deleteStudyLog(...args)
+          ? runSupabaseOrLocal(
+              () => supabaseStudyLogsRepository.deleteStudyLog(...args),
+              () => localStudyLogsRepository.deleteStudyLog(...args)
+            )
           : localStudyLogsRepository.deleteStudyLog(...args)
     }
   };

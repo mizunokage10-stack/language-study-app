@@ -16,6 +16,8 @@ const state = {
   currentPage: "home",
   currentUser: null,
   authReady: !supabase,
+  supabaseUnavailable: false,
+  supabaseUnavailableMessageShown: false,
   isBusy: false,
   learningItems: [],
   historyItems: [],
@@ -268,6 +270,50 @@ function setAuthMessage(message, isError = false) {
   elements.authMessage.classList.toggle("auth-message--error", isError);
 }
 
+function isSupabaseNetworkError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return (
+    error instanceof TypeError ||
+    message.includes("failed to fetch") ||
+    message.includes("load failed") ||
+    message.includes("networkerror") ||
+    message.includes("cors")
+  );
+}
+
+function markSupabaseUnavailable(error) {
+  if (!isSupabaseNetworkError(error)) {
+    return false;
+  }
+
+  state.supabaseUnavailable = true;
+  if (!state.supabaseUnavailableMessageShown) {
+    state.supabaseUnavailableMessageShown = true;
+    setAuthMessage(
+      "Supabaseに接続できないため、この端末のローカル保存に切り替えました。SupabaseのCORS/Allowed Origins設定を確認してください。",
+      true
+    );
+  }
+  return true;
+}
+
+async function verifySupabaseRestAccess() {
+  if (!supabase || state.supabaseUnavailable) {
+    return false;
+  }
+
+  try {
+    const { error } = await supabase.from("domains").select("id").limit(1);
+    if (error) {
+      return true;
+    }
+    return true;
+  } catch (error) {
+    markSupabaseUnavailable(error);
+    return false;
+  }
+}
+
 async function refreshCurrentPageAfterAuth() {
   if (state.currentPage === "learning-items") {
     await loadLearningItems();
@@ -290,7 +336,7 @@ async function applyAuthSession(session) {
   const user = session?.user ?? null;
   renderAuthPanel(user);
 
-  if (user) {
+  if (user && await verifySupabaseRestAccess()) {
     await migrateLocalDataToSupabase(user);
   }
 
@@ -460,7 +506,7 @@ function currentUserId() {
 }
 
 function canUseSupabaseUserStore() {
-  return Boolean(supabase && currentUserId());
+  return Boolean(supabase && !state.supabaseUnavailable && currentUserId());
 }
 
 function migrationMarkerKey(userId = currentUserId()) {
@@ -470,6 +516,22 @@ function migrationMarkerKey(userId = currentUserId()) {
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
+
+const learningItemColumns = [
+  "id",
+  "user_id",
+  "type",
+  "language",
+  "title",
+  "meaning",
+  "content",
+  "example",
+  "example_translation",
+  "note",
+  "tags",
+  "created_at",
+  "updated_at"
+].join(",");
 
 function readingMaterialSignature(item) {
   return [item?.title, item?.language, item?.level, item?.domain, item?.originalText]
@@ -2397,6 +2459,8 @@ const { materialsRepository, learningItemsRepository, srsRepository, learningSes
   supabase,
   fetchJson,
   getCurrentUser: () => state.currentUser,
+  isSupabaseDisabled: () => state.supabaseUnavailable,
+  onSupabaseUnavailable: markSupabaseUnavailable,
   getLearningItemFilters,
   filterLearningItems,
   tomorrowIsoDate
@@ -2499,15 +2563,15 @@ function studyLogRowForSupabase(log, userId, includeId = true) {
   return row;
 }
 
-async function insertWithOptionalId(tableName, row) {
-  const { data, error } = await supabase.from(tableName).insert(row).select("*").single();
+async function insertWithOptionalId(tableName, row, selectColumns = "*") {
+  const { data, error } = await supabase.from(tableName).insert(row).select(selectColumns).single();
   if (!error) {
     return data;
   }
 
   if ("id" in row) {
     const { id, ...rowWithoutId } = row;
-    const retry = await supabase.from(tableName).insert(rowWithoutId).select("*").single();
+    const retry = await supabase.from(tableName).insert(rowWithoutId).select(selectColumns).single();
     if (!retry.error) {
       return retry.data;
     }
@@ -2532,7 +2596,7 @@ async function migrateLearningDataToSupabase(user) {
 
   const { data: remoteItems, error: itemsError } = await supabase
     .from("learning_items")
-    .select("*")
+    .select(learningItemColumns)
     .eq("user_id", userId);
   if (itemsError) throw itemsError;
 
@@ -2558,7 +2622,7 @@ async function migrateLearningDataToSupabase(user) {
       continue;
     }
 
-    const inserted = await insertWithOptionalId("learning_items", learningItemRowForSupabase(item, userId));
+    const inserted = await insertWithOptionalId("learning_items", learningItemRowForSupabase(item, userId), learningItemColumns);
     idMap.set(item.id, inserted.id);
     remoteItemsById.set(inserted.id, inserted);
     remoteItemsBySignature.set(learningItemSignature(item), inserted);
@@ -2670,6 +2734,7 @@ async function migrateLocalDataToSupabase(user) {
       migratedCount += result.migratedCount;
     } catch (error) {
       console.warn("Learning data migration failed", error);
+      markSupabaseUnavailable(error);
       issues.push("単語・履歴データの一部");
     }
 
@@ -2677,6 +2742,7 @@ async function migrateLocalDataToSupabase(user) {
       migratedCount += await migrateReadingMaterialsToSupabase();
     } catch (error) {
       console.warn("Reading material migration failed", error);
+      markSupabaseUnavailable(error);
       issues.push("文章教材");
     }
 
