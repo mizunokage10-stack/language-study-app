@@ -205,7 +205,8 @@ const elements = {
 const COURSE_PART_MINUTES = {
   "course-30":  { vocab: 8,  listening: 7,  reading: 10, writing: 5  },
   "course-60":  { vocab: 15, listening: 15, reading: 20, writing: 10 },
-  "course-90":  { vocab: 20, listening: 20, reading: 35, writing: 15 }
+  "course-90":  { vocab: 20, listening: 20, reading: 35, writing: 15 },
+  "course-120": { vocab: 25, listening: 25, reading: 50, writing: 20 }
 };
 
 const coursePresets = [
@@ -244,6 +245,18 @@ const coursePresets = [
       { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-90"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
+  },
+  {
+    id: "course-120",
+    name: "120分コース",
+    totalMinutes: 120,
+    description: "徹底的に深く学ぶ集中コース",
+    steps: [
+      { id: "vocab",     title: "単語学習",         type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-120"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。SRS優先順位の高い単語を重点的に練習します。" },
+      { id: "listening", title: "リスニング",       type: "listening",  minutes: COURSE_PART_MINUTES["course-120"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。音声の速度を変えながら複数回聞きましょう。" },
+      { id: "reading",   title: "読解",             type: "reading",    minutes: COURSE_PART_MINUTES["course-120"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "writing",   title: "作文・アウトプット", type: "writing",    minutes: COURSE_PART_MINUTES["course-120"].writing,   instructions: "今日学んだ単語・表現を使って、段落レベルの文章を書きます。文法・語彙・構造を意識して書いてください。" }
+    ]
   }
 ];
 
@@ -277,7 +290,11 @@ function isSupabaseNetworkError(error) {
     message.includes("failed to fetch") ||
     message.includes("load failed") ||
     message.includes("networkerror") ||
-    message.includes("cors")
+    message.includes("cors") ||
+    message.includes("timeout") ||
+    message.includes("connection terminated") ||
+    message.includes("econnrefused") ||
+    message.includes("fetch error")
   );
 }
 
@@ -2488,7 +2505,7 @@ function learningItemRowForSupabase(item, userId, includeId = true) {
   const row = {
     user_id: userId,
     type: item.type || "vocabulary",
-    language: item.language || "english",
+    language: normalizeLearningLanguageCode(item.language || "english"),
     title: item.title || "",
     meaning: item.meaning || "",
     content: item.content || "",
@@ -4748,6 +4765,8 @@ document.querySelectorAll(".course-time-btn").forEach((button) => {
     const duration = button.dataset.duration;
     const durationSelect = document.querySelector("#course-filter-duration");
     if (durationSelect && duration) durationSelect.value = duration;
+    // state.courseFilters.duration を直接設定して renderCoursePresetList に反映させる
+    if (duration) state.courseFilters.duration = duration;
     switchPage("course");
   });
 });
@@ -4950,6 +4969,67 @@ elements.vocabBulkImport.addEventListener("click", async () => {
     await loadLearningItems();
     setStatus(`一括登録が完了しました。追加 ${stats.added}件・更新 ${stats.updated}件・スキップ ${stats.skipped}件`);
   }, "単語を一括登録しています...");
+});
+
+// ---- JSON形式 一括登録 (全タイプ対応) -------------------------------------------
+
+const VALID_LEARNING_ITEM_TYPES = new Set(["vocabulary", "grammar", "sentence", "listening", "writing", "reading"]);
+
+document.querySelector("#json-bulk-import")?.addEventListener("click", async () => {
+  const raw = (document.querySelector("#json-bulk-paste")?.value || "").trim();
+  const statusEl = document.querySelector("#json-bulk-status");
+  if (!raw) {
+    if (statusEl) statusEl.textContent = "JSONを貼り付けてください。";
+    return;
+  }
+
+  const normalized = normalizeReadingMaterialJsonText(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(normalized);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "JSONの形式が正しくありません: " + e.message;
+    return;
+  }
+
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  const validItems = items.filter((item) => item && typeof item === "object" && item.title);
+
+  if (!validItems.length) {
+    if (statusEl) statusEl.textContent = "有効なアイテムが見つかりませんでした。title フィールドが必要です。";
+    return;
+  }
+
+  await withBusy(async () => {
+    let added = 0;
+    let skipped = 0;
+    for (const raw of validItems) {
+      const item = {
+        type: VALID_LEARNING_ITEM_TYPES.has(raw.type) ? raw.type : "vocabulary",
+        language: normalizeLearningLanguageCode(raw.language || "english"),
+        title: String(raw.title || "").trim(),
+        meaning: String(raw.meaning || "").trim(),
+        content: String(raw.content || "").trim(),
+        example: String(raw.example || "").trim(),
+        exampleTranslation: String(raw.exampleTranslation || raw.example_translation || "").trim(),
+        note: String(raw.note || "").trim(),
+        tags: Array.isArray(raw.tags) ? raw.tags.map(String) : []
+      };
+      if (!item.title) { skipped += 1; continue; }
+
+      const result = await learningItemsRepository.createLearningItem(item);
+      if (result?.item?.id) {
+        await createInitialSrsData(result.item.id).catch(() => null);
+      }
+      added += 1;
+    }
+
+    document.querySelector("#json-bulk-paste").value = "";
+    await loadLearningItems();
+    const msg = `JSON登録完了: ${added}件追加・${skipped}件スキップ`;
+    if (statusEl) statusEl.textContent = msg;
+    setStatus(msg);
+  }, "JSON形式でアイテムを登録しています...");
 });
 
 // 文章登録 JSON 貼り付け
