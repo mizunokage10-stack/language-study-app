@@ -4,8 +4,8 @@ function formatSupabaseError(action, error) {
 
 function normalizeLearningLanguage(language = "") {
   const normalized = String(language || "").toLowerCase();
-  if (normalized === "en") return "english";
-  if (normalized === "zh") return "chinese";
+  if (normalized === "en" || normalized === "english") return "english";
+  if (normalized === "zh" || normalized === "chinese") return "chinese";
   return normalized || "english";
 }
 
@@ -52,7 +52,7 @@ function toLearningItemRow(item, userId) {
   return {
     user_id: userId,
     type: item.type || "vocabulary",
-    language: item.language || "english",
+    language: normalizeLearningLanguage(item.language) || "english",
     title: item.title || "",
     meaning: item.meaning || "",
     content: item.content || "",
@@ -284,7 +284,11 @@ export function createRepositories({
       message.includes("failed to fetch") ||
       message.includes("load failed") ||
       message.includes("networkerror") ||
-      message.includes("cors")
+      message.includes("cors") ||
+      message.includes("timeout") ||
+      message.includes("connection terminated") ||
+      message.includes("econnrefused") ||
+      message.includes("fetch error")
     );
   }
 
@@ -373,12 +377,17 @@ export function createRepositories({
 
     async getVocabularyItemsForLanguage(language) {
       const user = getSupabaseUser();
+      const normalizedLang = normalizeLearningLanguage(language);
+      // "en"/"english" や "zh"/"chinese" の両形式を包含するため in() を使う
+      const langVariants = normalizedLang === "english" ? ["english", "en"]
+        : normalizedLang === "chinese" ? ["chinese", "zh"]
+        : [normalizedLang];
       const { data, error } = await supabase
         .from("learning_items")
         .select(learningItemColumns)
         .eq("user_id", user.id)
         .eq("type", "vocabulary")
-        .eq("language", language)
+        .in("language", langVariants)
         .order("updated_at", { ascending: false });
 
       if (error) {

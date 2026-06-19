@@ -202,6 +202,15 @@
 
         </div><!-- /animals-row -->
 
+        <!-- 120分コース -->
+        <div class="home-extra-course">
+          <button class="course-time-btn btn-120" data-duration="120" type="button">
+            <span class="btn-label">じっくりコース</span>
+            <span class="btn-time">120分</span>
+            <span class="btn-start">▶ スタート</span>
+          </button>
+        </div>
+
         <div class="dance-floor"></div>
 
         <div class="home-sub-btns">
@@ -405,6 +414,48 @@
                   </div>
                 </div>
               </div>
+            </section>
+
+            <section class="card" style="margin-top:1.5rem;">
+              <h3>JSON形式で登録（語彙・例文・文法・リスニング対応）</h3>
+              <p class="muted">AIに生成してもらったJSONをそのまま貼り付けて登録できます。複数件対応。</p>
+              <details style="margin-bottom:0.75rem;">
+                <summary class="muted" style="cursor:pointer;">JSONフォーマットの例を見る</summary>
+                <pre style="font-size:0.75rem;overflow:auto;background:var(--surface-alt,#f5f5f5);padding:0.75rem;border-radius:6px;margin-top:0.5rem;">[
+  {
+    "type": "vocabulary",
+    "language": "english",
+    "title": "persevere",
+    "meaning": "困難に負けずやり続ける",
+    "example": "She persevered through hardship.",
+    "exampleTranslation": "彼女は困難を乗り越えてやり続けた。",
+    "tags": ["B2", "動詞"]
+  },
+  {
+    "type": "sentence",
+    "language": "english",
+    "title": "音読例文：受動態",
+    "content": "The report was written by the team.",
+    "meaning": "そのレポートはチームによって書かれた。",
+    "tags": ["B1", "受動態"]
+  },
+  {
+    "type": "grammar",
+    "language": "english",
+    "title": "関係代名詞 that vs which",
+    "content": "制限用法では that、非制限用法では which を使う。",
+    "example": "The book that I bought is interesting.",
+    "tags": ["B1", "文法"]
+  }
+]</pre>
+              </details>
+              <label>貼り付け（JSONオブジェクト 1件、または配列 [...]）
+                <textarea id="json-bulk-paste" rows="8" placeholder='[{"type":"vocabulary","language":"english","title":"...","meaning":"..."}]'></textarea>
+              </label>
+              <div class="mini-actions">
+                <button type="button" id="json-bulk-import">JSONで一括登録</button>
+              </div>
+              <p id="json-bulk-status" class="muted" style="margin-top:0.5rem;"></p>
             </section>
 
             <!-- 互換用：非表示フォーム -->
