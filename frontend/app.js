@@ -335,6 +335,9 @@ async function refreshCurrentPageAfterAuth() {
   if (state.currentPage === "learning-items") {
     await loadLearningItems();
   }
+  if (state.currentPage === "vocab-list") {
+    await loadVocabListPage();
+  }
   if (state.currentPage === "review") {
     await loadReviewItems();
   }
