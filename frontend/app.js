@@ -315,20 +315,7 @@ function markSupabaseUnavailable(error) {
 }
 
 async function verifySupabaseRestAccess() {
-  if (!supabase || state.supabaseUnavailable) {
-    return false;
-  }
-
-  try {
-    const { error } = await supabase.from("domains").select("id").limit(1);
-    if (error) {
-      return true;
-    }
-    return true;
-  } catch (error) {
-    markSupabaseUnavailable(error);
-    return false;
-  }
+  return Boolean(supabase && !state.supabaseUnavailable);
 }
 
 async function refreshCurrentPageAfterAuth() {
