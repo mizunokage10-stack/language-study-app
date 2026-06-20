@@ -346,53 +346,32 @@ export function createRepositories({
   };
 
   const supabaseLearningItemsRepository = {
-    async getLearningItems() {
-      getSupabaseUser(); // validate session exists
-      const params = getLearningItemFilters();
-      let query = supabase
-        .from("learning_items")
-        .select(learningItemColumns)
-        .order("updated_at", { ascending: false });
-
-      if (params.get("type")) {
-        query = query.eq("type", params.get("type"));
-      }
-
-      if (params.get("language")) {
-        query = query.eq("language", params.get("language"));
-      }
-
-      if (params.get("tag")) {
-        query = query.contains("tags", [params.get("tag")]);
-      }
-
-      const { data, error } = await query;
+    async _fetchAllMyItems() {
+      const { data, error } = await supabase.rpc("get_my_learning_items");
       if (error) {
         throw new Error(formatSupabaseError("取得", error));
       }
+      return (data || []).map(toLearningItem);
+    },
 
-      return { items: filterLearningItems((data || []).map(toLearningItem), params) };
+    async getLearningItems() {
+      getSupabaseUser();
+      const params = getLearningItemFilters();
+      const allItems = await this._fetchAllMyItems();
+      return { items: filterLearningItems(allItems, params) };
     },
 
     async getVocabularyItemsForLanguage(language) {
-      getSupabaseUser(); // validate session exists
+      getSupabaseUser();
       const normalizedLang = normalizeLearningLanguage(language);
-      // "en"/"english" や "zh"/"chinese" の両形式を包含するため in() を使う
       const langVariants = normalizedLang === "english" ? ["english", "en"]
         : normalizedLang === "chinese" ? ["chinese", "zh"]
         : [normalizedLang];
-      const { data, error } = await supabase
-        .from("learning_items")
-        .select(learningItemColumns)
-        .eq("type", "vocabulary")
-        .in("language", langVariants)
-        .order("updated_at", { ascending: false });
-
-      if (error) {
-        throw new Error(formatSupabaseError("取得", error));
-      }
-
-      return { items: (data || []).map(toLearningItem) };
+      const allItems = await this._fetchAllMyItems();
+      const items = allItems.filter(
+        item => item.type === "vocabulary" && langVariants.includes(item.language)
+      );
+      return { items };
     },
 
     async createLearningItem(payload) {
@@ -443,22 +422,13 @@ export function createRepositories({
     },
 
     async getLearningItemsByIds(ids) {
-      const user = getSupabaseUser();
+      getSupabaseUser();
       if (!ids.length) {
         return { items: [] };
       }
-
-      const { data, error } = await supabase
-        .from("learning_items")
-        .select(learningItemColumns)
-        .eq("user_id", user.id)
-        .in("id", ids);
-
-      if (error) {
-        throw new Error(formatSupabaseError("取得", error));
-      }
-
-      return { items: (data || []).map(toLearningItem) };
+      const idSet = new Set(ids);
+      const allItems = await this._fetchAllMyItems();
+      return { items: allItems.filter(item => idSet.has(item.id)) };
     }
   };
 
