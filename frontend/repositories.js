@@ -347,12 +347,11 @@ export function createRepositories({
 
   const supabaseLearningItemsRepository = {
     async getLearningItems() {
-      const user = getSupabaseUser();
+      getSupabaseUser(); // validate session exists
       const params = getLearningItemFilters();
       let query = supabase
         .from("learning_items")
         .select(learningItemColumns)
-        .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
 
       if (params.get("type")) {
@@ -376,7 +375,7 @@ export function createRepositories({
     },
 
     async getVocabularyItemsForLanguage(language) {
-      const user = getSupabaseUser();
+      getSupabaseUser(); // validate session exists
       const normalizedLang = normalizeLearningLanguage(language);
       // "en"/"english" や "zh"/"chinese" の両形式を包含するため in() を使う
       const langVariants = normalizedLang === "english" ? ["english", "en"]
@@ -385,7 +384,6 @@ export function createRepositories({
       const { data, error } = await supabase
         .from("learning_items")
         .select(learningItemColumns)
-        .eq("user_id", user.id)
         .eq("type", "vocabulary")
         .in("language", langVariants)
         .order("updated_at", { ascending: false });
