@@ -560,23 +560,33 @@ async function readUserMetadata() {
 }
 
 async function readSupabaseReadingMaterials() {
-  const metadata = await readUserMetadata();
-  const items = metadata[userStoreKeys.readingMaterials];
-  return Array.isArray(items) ? items : [];
+  const { data, error } = await supabase
+    .from("user_reading_materials")
+    .select("id, data, created_at, updated_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message || "文章教材の取得に失敗しました。");
+  return (data || []).map(row => ({
+    ...row.data,
+    id: row.id,
+    createdAt: row.data.createdAt || row.created_at,
+    updatedAt: row.data.updatedAt || row.updated_at
+  }));
 }
 
 async function writeSupabaseReadingMaterials(items) {
-  const metadata = await readUserMetadata();
-  const { error } = await supabase.auth.updateUser({
-    data: {
-      ...metadata,
-      [userStoreKeys.readingMaterials]: items
-    }
-  });
-
-  if (error) {
-    throw new Error(error.message || "文章教材の保存に失敗しました。");
-  }
+  const userId = currentUserId();
+  if (!userId) throw new Error("ログインが必要です。");
+  const rows = items.map(item => ({
+    id: item.id,
+    user_id: userId,
+    data: item,
+    created_at: item.createdAt || new Date().toISOString(),
+    updated_at: item.updatedAt || new Date().toISOString()
+  }));
+  const { error } = await supabase
+    .from("user_reading_materials")
+    .upsert(rows, { onConflict: "id" });
+  if (error) throw new Error(error.message || "文章教材の保存に失敗しました。");
 }
 
 async function handleSupabaseReadingMaterials(url, options = {}) {
@@ -584,10 +594,11 @@ async function handleSupabaseReadingMaterials(url, options = {}) {
   const path = parsedUrl.pathname;
   const method = options.method || "GET";
   const body = options.body ? JSON.parse(options.body) : {};
-  const items = await readSupabaseReadingMaterials();
+  const userId = currentUserId();
 
   if (path === "/api/reading-materials" && method === "GET") {
-    return localJsonResponse({ items: sortByCreatedAtDesc(items) });
+    const items = await readSupabaseReadingMaterials();
+    return localJsonResponse({ items });
   }
 
   if (path === "/api/reading-materials" && method === "POST") {
@@ -612,25 +623,38 @@ async function handleSupabaseReadingMaterials(url, options = {}) {
       createdAt: body.createdAt || timestamp,
       updatedAt: timestamp
     };
-    const nextItems = [item, ...items];
-    await writeSupabaseReadingMaterials(nextItems);
+    const { error } = await supabase
+      .from("user_reading_materials")
+      .insert({ id: item.id, user_id: userId, data: item, created_at: item.createdAt, updated_at: item.updatedAt });
+    if (error) throw new Error(error.message || "文章教材の保存に失敗しました。");
     return localJsonResponse({ item });
   }
 
   if (path.startsWith("/api/reading-materials/")) {
     const id = decodeURIComponent(path.split("/").pop());
-    const index = items.findIndex((item) => item.id === id);
 
-    if (method === "PATCH" && index !== -1) {
-      const nextItems = [...items];
-      nextItems[index] = { ...nextItems[index], ...body, updatedAt: new Date().toISOString() };
-      await writeSupabaseReadingMaterials(nextItems);
-      return localJsonResponse({ item: nextItems[index] });
+    if (method === "PATCH") {
+      const { data: existing, error: fetchErr } = await supabase
+        .from("user_reading_materials")
+        .select("data")
+        .eq("id", id)
+        .single();
+      if (fetchErr) throw new Error(fetchErr.message);
+      const updatedItem = { ...existing.data, ...body, updatedAt: new Date().toISOString() };
+      const { error } = await supabase
+        .from("user_reading_materials")
+        .update({ data: updatedItem, updated_at: updatedItem.updatedAt })
+        .eq("id", id);
+      if (error) throw new Error(error.message || "文章教材の更新に失敗しました。");
+      return localJsonResponse({ item: updatedItem });
     }
 
-    if (method === "DELETE" && index !== -1) {
-      const nextItems = items.filter((item) => item.id !== id);
-      await writeSupabaseReadingMaterials(nextItems);
+    if (method === "DELETE") {
+      const { error } = await supabase
+        .from("user_reading_materials")
+        .delete()
+        .eq("id", id);
+      if (error) throw new Error(error.message || "文章教材の削除に失敗しました。");
       return localJsonResponse({ ok: true });
     }
   }
