@@ -1992,7 +1992,9 @@ function vocabularyAnswerRows(item) {
   return [
     ["意味", item.meaning],
     ["品詞", itemDetailValue(item, "pos", "品詞")],
+    ["拼音", noteValueForLabel(item.note, "拼音")],
     ["例文", item.example],
+    ["例文の拼音", noteValueForLabel(item.note, "例文の拼音")],
     ["例文訳", item.exampleTranslation],
     ["コロケーション", itemDetailValue(item, "collocation", "コロケーション")],
     ["覚えるコツ", noteValueForLabel(item.note, "使い方メモ") || item.note],
@@ -3767,6 +3769,7 @@ function renderReadingCourseStep(container) {
             ${ir.vocabulary.map((v) => `
               <div class="vocab-chip">
                 <strong>${escapeHtml(v.word || "")}</strong>
+                ${v.pinyin ? `<span class="muted">${escapeHtml(v.pinyin)}</span>` : ""}
                 <span class="muted">（${escapeHtml(v.partOfSpeech || "")}）</span>
                 <span>${escapeHtml(v.meaningJa || "")}</span>
                 ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
