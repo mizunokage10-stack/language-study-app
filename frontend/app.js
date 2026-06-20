@@ -218,7 +218,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-30"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-30"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-30"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
@@ -230,7 +230,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-60"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-60"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-60"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
@@ -242,7 +242,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-90"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-90"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-90"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
@@ -254,7 +254,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",         type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-120"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。SRS優先順位の高い単語を重点的に練習します。" },
       { id: "listening", title: "リスニング",       type: "listening",  minutes: COURSE_PART_MINUTES["course-120"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。音声の速度を変えながら複数回聞きましょう。" },
-      { id: "reading",   title: "読解",             type: "reading",    minutes: COURSE_PART_MINUTES["course-120"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読→再読→音読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",             type: "reading",    minutes: COURSE_PART_MINUTES["course-120"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
       { id: "writing",   title: "作文・アウトプット", type: "writing",    minutes: COURSE_PART_MINUTES["course-120"].writing,   instructions: "今日学んだ単語・表現を使って、段落レベルの文章を書きます。文法・語彙・構造を意識して書いてください。" }
     ]
   }
@@ -713,7 +713,6 @@ function validateReadingMaterialPayload(payload) {
     "comprehensionQuestions",
     "intensiveReading",
     "rereading",
-    "oralPractice",
     "oneSentenceOutput"
   ];
 
@@ -3651,12 +3650,11 @@ function selectReadingMaterial() {
 }
 
 const READING_SUB_STEPS = [
-  { key: "firstReading",       label: "① 初読",               description: "辞書を使わず、止まらずに読みましょう。完璧に理解しようとせず、全体の流れを掴むことを目標にしましょう。" },
-  { key: "comprehension",      label: "② 確認設問",           description: "初読でどれくらい意味を掴めたか確認します。" },
-  { key: "intensiveReading",   label: "③ 精読・語彙整理",     description: "語彙・文法・構文を確認します。ここでは止まって確認してください。" },
-  { key: "rereading",          label: "④ 再読",               description: "今度は初読より少し速く読むことを目標にしましょう。意味をかたまりで処理することを意識してください。" },
-  { key: "oralPractice",       label: "⑤ 音読・シャドーイング", description: "本文を見ながら声に出して読んでください。余裕があればシャドーイングも行いましょう。" },
-  { key: "oneSentenceOutput",  label: "⑥ 1文アウトプット",    description: "本文で使われていた表現を1つ選び、自分の生活や考えに置き換えて1文書いてください。" }
+  { key: "firstReading",       label: "① 初読",                       description: "辞書を使わず、止まらずに読みましょう。完璧に理解しようとせず、全体の流れを掴むことを目標にしましょう。" },
+  { key: "comprehension",      label: "② 確認設問",                   description: "初読でどれくらい意味を掴めたか確認します。" },
+  { key: "intensiveReading",   label: "③ 精読・文法構文・語彙整理",   description: "語彙・文法・構文を丁寧に確認します。ここでは止まって確認してください。" },
+  { key: "rereading",          label: "④ 再読",                       description: "今度は初読より少し速く読むことを目標にしましょう。意味をかたまりで処理することを意識してください。" },
+  { key: "oneSentenceOutput",  label: "⑤ 1文アウトプット",            description: "本文で使われていた表現を1つ選び、自分の生活や考えに置き換えて1文書いてください。" }
 ];
 
 function renderReadingCourseStep(container) {
@@ -3824,31 +3822,9 @@ function renderReadingCourseStep(container) {
         <h4>本文</h4>
         <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
       </section>
-      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 音読へ</button></div>
+      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 1文アウトプットへ</button></div>
     `;
   } else if (subStep === 4) {
-    const oral = mat.oralPractice || {};
-    const inst = oral.instruction || stepInfo.description;
-    const focuses = oral.focusChunks || [];
-    content = `
-      <section class="section-card">
-        <h4>${stepInfo.label}</h4>
-        <p>${escapeHtml(inst)}</p>
-        ${focuses.length ? `
-          <p class="muted">特に意識するチャンク：</p>
-          <div class="focus-chunks">${focuses.map((c) => `<code>${escapeHtml(c)}</code>`).join("")}</div>
-        ` : ""}
-      </section>
-      <section class="section-card">
-        <h4>本文</h4>
-        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
-        <div class="mini-actions" style="margin-top:0.75rem">
-          <button type="button" id="reading-tts-play" class="soft-button">▶ 読み上げ</button>
-        </div>
-      </section>
-      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">音読完了 → 1文アウトプットへ</button></div>
-    `;
-  } else if (subStep === 5) {
     const out = mat.oneSentenceOutput || {};
     const inst = out.instruction || stepInfo.description;
     const exprs = out.recommendedExpressions || [];
@@ -3878,7 +3854,7 @@ function renderReadingCourseStep(container) {
 
   container.querySelector("#reading-substep-next")?.addEventListener("click", () => {
     syncCourseTextInputs();
-    run.readingSubStep = Math.min(run.readingSubStep + 1, 5);
+    run.readingSubStep = Math.min(run.readingSubStep + 1, 4);
     renderReadingCourseStep(container);
   });
 
