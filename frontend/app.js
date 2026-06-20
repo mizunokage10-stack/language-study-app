@@ -2741,7 +2741,6 @@ async function migrateLocalDataToSupabase(user) {
       migratedCount += result.migratedCount;
     } catch (error) {
       console.warn("Learning data migration failed", error);
-      markSupabaseUnavailable(error);
       issues.push("単語・履歴データの一部");
     }
 
@@ -2749,7 +2748,6 @@ async function migrateLocalDataToSupabase(user) {
       migratedCount += await migrateReadingMaterialsToSupabase();
     } catch (error) {
       console.warn("Reading material migration failed", error);
-      markSupabaseUnavailable(error);
       issues.push("文章教材");
     }
 
