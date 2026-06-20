@@ -1962,9 +1962,11 @@ function isSameLearningLanguage(itemLanguage, targetLanguage) {
   return normalizeLearningLanguageCode(itemLanguage) === normalizeLearningLanguageCode(targetLanguage);
 }
 
-function buildVocabularyKnowledgeNote({ pos = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
+function buildVocabularyKnowledgeNote({ pos = "", pinyin = "", examplePinyin = "", collocation = "", note = "", scene = "", cefr = "", domain = "" }) {
   return [
     pos ? `品詞: ${pos}` : "",
+    pinyin ? `拼音: ${pinyin}` : "",
+    examplePinyin ? `例文の拼音: ${examplePinyin}` : "",
     collocation ? `コロケーション: ${collocation}` : "",
     note ? `使い方メモ: ${note}` : "",
     scene ? `使う場面: ${scene}` : "",
@@ -4813,33 +4815,26 @@ updateLearningItemFormVisibility();
 
 elements.copyVocabPrompt.addEventListener("click", () => {
   const prompt = `あなたは言語学習教材を作成する専門家です。
-
 これから私が、覚えたい単語・表現を複数並べます。
 それぞれについて、言語学習アプリに登録しやすいように、必ず指定された形式で出力してください。
-
 # 目的
-
 単語を単体で覚えるのではなく、以下の情報をセットにして学習できる教材を作ることが目的です。
-
 - 単語・表現
 - 日本語訳
 - 品詞
 - 自然な例文
 - 例文の日本語訳
+- 中国語の場合の拼音
+- 中国語例文の拼音
 - コロケーション
 - 補足説明
 - 使われる場面
 - CEFR目安
 - 領域
-
 # 出力ルール
-
 以下の形式で、1単語につき1行で出力してください。
-
-単語 / 日本語訳 / 品詞 / 例文 / 例文の日本語訳 / コロケーション / 補足 / 使われる場面 / CEFR目安 / 領域
-
+単語 / 日本語訳 / 品詞 / 例文 / 例文の日本語訳 / 拼音 / 例文の拼音 / コロケーション / 補足 / 使われる場面 / CEFR目安 / 領域
 # 重要な形式ルール
-
 - 各項目は必ず半角スラッシュ「 / 」で区切ってください。
 - 1単語につき必ず1行で出力してください。
 - 表やMarkdownの表形式にはしないでください。
@@ -4850,11 +4845,12 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 - 例文は、実際に日常会話・読解・作文で使いやすい自然な文にしてください。
 - 例文では、その単語がよく一緒に使われる語句、つまりコロケーションを意識してください。
 - 日本語訳は直訳ではなく、学習者が理解しやすい自然な訳にしてください。
+- 中国語の単語・表現の場合は、拼音を声調記号付きで書いてください。
+- 中国語の例文の場合は、例文全体の拼音も声調記号付きで書いてください。
+- 中国語以外の場合は、拼音と例文の拼音の欄は空欄にしてください。
 - CEFR目安は A1 / A2 / B1 / B2 / C1 / C2 のいずれかで出してください。
 - 領域は、以下の10領域から最も近いものを1つ選んでください。
-
 # 領域一覧
-
 1. 社会・家庭
 2. 教育・連絡
 3. 仕事
@@ -4865,17 +4861,11 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 8. 言語圏の文化
 9. 先端技術
 10. 環境
-
 # 品詞の書き方
-
 英語の場合は、以下のように日本語で書いてください。
-
 名詞、動詞、形容詞、副詞、前置詞、接続詞、代名詞、熟語、句動詞、表現
-
 # 補足の書き方
-
 補足には、必要に応じて以下のような情報を書いてください。
-
 - 似た単語との違い
 - フォーマル / カジュアルの違い
 - よく使われる文脈
@@ -4883,22 +4873,15 @@ elements.copyVocabPrompt.addEventListener("click", () => {
 - 可算 / 不可算
 - 自動詞 / 他動詞
 - 前置詞との組み合わせ
-
 # コロケーションの書き方
-
 コロケーションには、その単語と一緒に使われやすい語句を2〜4個ほど書いてください。
-
 例：
 make a decision, an important decision, a quick decision
-
 # 出力例
-
-apple / りんご / 名詞 / I eat an apple every morning. / 私は毎朝りんごを食べます。 / eat an apple, a red apple, apple juice / 果物を表す基本語。日常会話や食べ物の話題でよく使う。 / 食事・買い物・日常会話 / A1 / 買い物・消費
-
+apple / りんご / 名詞 / I eat an apple every morning. / 私は毎朝りんごを食べます。 /  /  / eat an apple, a red apple, apple juice / 果物を表す基本語。日常会話や食べ物の話題でよく使う。 / 食事・買い物・日常会話 / A1 / 買い物・消費
+学习 / 学ぶ、勉強する / 動詞 / 我每天学习中文。 / 私は毎日中国語を勉強します。 / xuéxí / Wǒ měitiān xuéxí Zhōngwén. / 学习中文, 努力学习, 学习方法 / 中国語の基本動詞。学校や独学の文脈でよく使う。 / 学習・日常会話 / A1 / 教育・連絡
 # 私が登録したい単語・表現
-
 ここに単語を並べます。
-
 [ここに単語を入力]`;
   navigator.clipboard.writeText(prompt).then(() => {
     setStatus("プロンプトをクリップボードにコピーしました。ChatGPT / Claude に貼り付けてください。");
@@ -4914,11 +4897,13 @@ elements.vocabBulkImport.addEventListener("click", async () => {
   const items = lines.map((line) => {
     const cols = line.split(" / ");
     const pos = (cols[2] || "").trim();
-    const collocation = (cols[5] || "").trim();
-    const note = (cols[6] || "").trim();
-    const scene = (cols[7] || "").trim();
-    const cefr = (cols[8] || "").trim();
-    const domain = (cols[9] || "").trim();
+    const pinyin = (cols[5] || "").trim();
+    const examplePinyin = (cols[6] || "").trim();
+    const collocation = (cols[7] || "").trim();
+    const note = (cols[8] || "").trim();
+    const scene = (cols[9] || "").trim();
+    const cefr = (cols[10] || "").trim();
+    const domain = (cols[11] || "").trim();
     return {
       type: "vocabulary",
       language,
@@ -4927,8 +4912,10 @@ elements.vocabBulkImport.addEventListener("click", async () => {
       pos,
       example: (cols[3] || "").trim(),
       exampleTranslation: (cols[4] || "").trim(),
+      pinyin,
+      examplePinyin,
       collocation,
-      note: buildVocabularyKnowledgeNote({ pos, collocation, note, scene, cefr, domain }),
+      note: buildVocabularyKnowledgeNote({ pos, pinyin, examplePinyin, collocation, note, scene, cefr, domain }),
       scene,
       cefr,
       domain,
