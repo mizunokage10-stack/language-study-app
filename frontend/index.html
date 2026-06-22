@@ -775,12 +775,32 @@
         var copyReadingBtn = document.querySelector('#copy-reading-prompt');
         if (copyReadingBtn) {
           copyReadingBtn.addEventListener('click', function() {
-            navigator.clipboard.writeText(READING_PROMPT_TEXT).then(function() {
+            function onSuccess() {
               copyReadingBtn.textContent = 'コピーしました！';
               setTimeout(function() { copyReadingBtn.textContent = 'プロンプトをコピー'; }, 2000);
-            }).catch(function() {
-              copyReadingBtn.textContent = 'コピー失敗（手動でコピーしてください）';
-            });
+            }
+            function onFail() {
+              // execCommand fallback
+              try {
+                var ta = document.createElement('textarea');
+                ta.value = READING_PROMPT_TEXT;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                var ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (ok) { onSuccess(); } else { copyReadingBtn.textContent = 'コピー失敗'; }
+              } catch (e) {
+                copyReadingBtn.textContent = 'コピー失敗';
+              }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(READING_PROMPT_TEXT).then(onSuccess).catch(onFail);
+            } else {
+              onFail();
+            }
           });
         }
 
