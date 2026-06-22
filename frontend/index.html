@@ -493,9 +493,9 @@
               </div>
               <details style="margin-top:1.5rem">
                 <summary class="muted" style="cursor:pointer">ChatGPT用プロンプトを表示</summary>
-                <div class=”chatgpt-prompt-box”>
-                  <p class=”muted” style=”margin-bottom:0.5rem”>以下をコピーして、ChatGPTに貼り付け後、末尾に文章を追加してください。</p>
-                  <button type=”button” id=”copy-reading-prompt” class=”soft-button”>プロンプトをコピー</button>
+                <div class="chatgpt-prompt-box">
+                  <p class="muted" style="margin-bottom:0.5rem">以下をコピーして、ChatGPTに貼り付け後、末尾に文章を追加してください。</p>
+                  <button type="button" id="copy-reading-prompt" class="soft-button">プロンプトをコピー</button>
                 </div>
               </details>
             </section>
@@ -773,34 +773,37 @@
         // 読解プロンプトのコピー
         var READING_PROMPT_TEXT = "以下の文章を、言語学習アプリの読解パートに登録できる教材JSONに変換してください。\n\n目的は、文章をただ読むだけではなく、以下の5ステップで学習できるようにすることです。\n\n1. 初読  2. 確認設問  3. 精読・文法構文・語彙整理  4.再読  5. 1文アウトプット\n\n以下の条件に従って、必ずJSONのみを出力してください。説明文、前置き、Markdownのコードブロックは不要です。\n\n【重要】出力は、JSON.parseでそのまま読み込める厳密なJSONだけにしてください。\nJSONのキー名と文字列は、必ず半角ダブルクォート \" で囲んでください。\nスマートクォート “ ” や ‘ ’ は絶対に使わないでください。\nMarkdownのコードブロック、説明文、前置き、末尾コメントは不要です。\n\nただし、explanation・explanationJa・note・instruction などの文字列の中で英語フレーズを引用する場合は、半角ダブルクォート \" ではなく、日本語の鍵括弧 「 」 を使ってください。また中国語の場合ピン音を必ずつけてください\n\n例：\n正: \"explanation\": \"本文の冒頭で 「Outdoor drinking should be prohibited」 と述べており...\"\n誤: \"explanation\": \"本文の冒頭で \\\"Outdoor drinking should be prohibited\\\" と述べており...\"\n\n{\n  \"type\": \"reading_text\",\n  \"title\": \"\",\n  \"language\": \"en\",\n  \"level\": \"B2\",\n  \"domain\": \"\",\n  \"sourceNote\": \"ユーザー貼り付け教材\",\n  \"originalText\": \"\",\n  \"japaneseTranslation\": \"\",\n  \"firstReading\": { \"targetSeconds\": 0, \"instruction\": \"\" },\n  \"comprehensionQuestions\": [\n    { \"question\": \"\", \"choices\": [\"\", \"\", \"\"], \"answer\": \"\", \"explanation\": \"\" },\n    { \"question\": \"\", \"choices\": [\"\", \"\", \"\"], \"answer\": \"\", \"explanation\": \"\" },\n    { \"question\": \"\", \"choices\": [\"\", \"\", \"\"], \"answer\": \"\", \"explanation\": \"\" }\n  ],\n  \"intensiveReading\": {\n    \"vocabulary\": [{ \"word\": \"\", \"pinyin\": \"\", \"meaningJa\": \"\", \"partOfSpeech\": \"\", \"note\": \"\" }],\n    \"chunks\": [{ \"chunk\": \"\", \"meaningJa\": \"\", \"note\": \"\" }],\n    \"grammarPoints\": [{ \"title\": \"\", \"explanationJa\": \"\", \"example\": \"\" }],\n    \"notes\": [\"\"]\n  },\n  \"rereading\": { \"targetSeconds\": 0, \"instruction\": \"\" },\n  \"oneSentenceOutput\": { \"instruction\": \"\", \"recommendedExpressions\": [\"\", \"\"] }\n}\n\n※ language は英語なら \"en\"、中国語なら \"zh\" を使ってください。\n※ level は CEFR レベル（A1 / A2 / B1 / B2 / C1）を使ってください。\n\n変換する文章：";
         var copyReadingBtn = document.querySelector('#copy-reading-prompt');
+        function copyTextToClipboard(text) {
+          if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text);
+          }
+
+          var textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.top = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.select();
+
+          try {
+            var copied = document.execCommand('copy');
+            return copied ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+          } catch (error) {
+            return Promise.reject(error);
+          } finally {
+            document.body.removeChild(textarea);
+          }
+        }
         if (copyReadingBtn) {
           copyReadingBtn.addEventListener('click', function() {
-            function onSuccess() {
+            copyTextToClipboard(READING_PROMPT_TEXT).then(function() {
               copyReadingBtn.textContent = 'コピーしました！';
               setTimeout(function() { copyReadingBtn.textContent = 'プロンプトをコピー'; }, 2000);
-            }
-            function onFail() {
-              // execCommand fallback
-              try {
-                var ta = document.createElement('textarea');
-                ta.value = READING_PROMPT_TEXT;
-                ta.style.position = 'fixed';
-                ta.style.opacity = '0';
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
-                var ok = document.execCommand('copy');
-                document.body.removeChild(ta);
-                if (ok) { onSuccess(); } else { copyReadingBtn.textContent = 'コピー失敗'; }
-              } catch (e) {
-                copyReadingBtn.textContent = 'コピー失敗';
-              }
-            }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(READING_PROMPT_TEXT).then(onSuccess).catch(onFail);
-            } else {
-              onFail();
-            }
+            }).catch(function() {
+              copyReadingBtn.textContent = 'コピーできませんでした';
+              setTimeout(function() { copyReadingBtn.textContent = 'プロンプトをコピー'; }, 2000);
+            });
           });
         }
 
