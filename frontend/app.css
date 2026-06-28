@@ -600,3 +600,81 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
 /* ── Completed badge ── */
 .completed-badge { font-size: 0.7em; background: rgba(100,200,100,0.25); color: #8ef; border-radius: 8px; padding: 1px 7px; margin-left: 4px; }
 .reading-material-completed td { opacity: 0.55; }
+
+/* ── Reading material selector ── */
+.reading-selector-head {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+}
+.reading-selector-head h4 { margin: 0 0 4px; }
+.reading-selector-count {
+  min-width: 96px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  text-align: center;
+}
+.reading-selector-count span {
+  display: block;
+  color: rgba(255,255,255,0.55);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.reading-selector-count strong { display: block; color: white; font-size: 1.45rem; }
+.reading-selector-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 10px;
+}
+.reading-selector-filters label { margin: 0; }
+.reading-material-choice-list { display: grid; gap: 10px; }
+.reading-material-choice-card {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+}
+.reading-material-choice-card h5 {
+  margin: 0 0 8px;
+  color: white;
+  font-size: 1rem;
+}
+.reading-material-choice-card dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0 0 8px;
+}
+.reading-material-choice-card dt {
+  color: rgba(255,255,255,0.5);
+  font-weight: 800;
+}
+.reading-material-choice-card dd { margin: 0; }
+.reading-material-choice-card p { margin: 0; color: rgba(255,255,255,0.65); line-height: 1.65; }
+.reading-material-select-button { white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .reading-selector-head,
+  .reading-selector-filters,
+  .reading-material-choice-card {
+    grid-template-columns: 1fr;
+  }
+  .reading-selector-count {
+    width: 100%;
+    text-align: left;
+  }
+  .reading-material-select-button {
+    width: 100%;
+  }
+}

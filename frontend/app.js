@@ -3651,6 +3651,240 @@ function selectReadingMaterial() {
   return state.localReadingMaterials.find((m) => !m.completed && (!targetLanguage || String(m.language || "").toLowerCase() === targetLanguage)) || null;
 }
 
+function firstPresentValue(item, keys = []) {
+  for (const key of keys) {
+    const value = item?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return "";
+}
+
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function readingMaterialTitle(item) {
+  return firstPresentValue(item, ["title", "name"]) || "タイトル未設定";
+}
+
+function readingMaterialLanguage(item) {
+  return firstPresentValue(item, ["language", "lang"]) || "未設定";
+}
+
+function readingMaterialLevel(item) {
+  return firstPresentValue(item, ["cefr", "cefrLevel", "cefr_level", "level"]) || "未設定";
+}
+
+function readingMaterialDomain(item) {
+  return firstPresentValue(item, ["domain", "category", "genre", "topic"]) || "未設定";
+}
+
+function readingMaterialText(item) {
+  return firstPresentValue(item, ["originalText", "text", "content", "readingText", "body"]);
+}
+
+function readingMaterialDescription(item) {
+  const description = firstPresentValue(item, ["description", "summary", "sourceNote", "note"]);
+  if (description) return description;
+  const text = readingMaterialText(item);
+  return text ? `${text.slice(0, 120)}${text.length > 120 ? "..." : ""}` : "説明未設定";
+}
+
+function readingMaterialEstimatedTime(item) {
+  const minutes = firstPresentValue(item, ["estimatedMinutes", "estimatedStudyMinutes", "studyMinutes", "durationMinutes", "minutes"]);
+  if (minutes) return `${minutes}分`;
+  const seconds = firstPresentValue(item, ["estimatedSeconds", "durationSeconds"]);
+  if (seconds) return `${Math.max(1, Math.ceil(Number(seconds) / 60))}分`;
+  return "未設定";
+}
+
+function readingMaterialMatchesFilter(item, filters) {
+  const language = String(readingMaterialLanguage(item)).toLowerCase();
+  const level = String(readingMaterialLevel(item)).toLowerCase();
+  const domain = String(readingMaterialDomain(item)).toLowerCase();
+
+  return (
+    (!filters.language || language === filters.language.toLowerCase()) &&
+    (!filters.level || level === filters.level.toLowerCase()) &&
+    (!filters.domain || domain === filters.domain.toLowerCase())
+  );
+}
+
+function uniqueReadingMaterialOptions(items, getter) {
+  return uniqueValues(items.map(getter).filter((value) => value && value !== "未設定"))
+    .sort((a, b) => String(a).localeCompare(String(b), "ja"));
+}
+
+function readingSelectionFilters(container) {
+  return {
+    language: container.querySelector("#reading-material-language-filter")?.value || "",
+    level: container.querySelector("#reading-material-level-filter")?.value || "",
+    domain: container.querySelector("#reading-material-domain-filter")?.value || ""
+  };
+}
+
+function resetReadingProgress(run) {
+  run.readingSubStep = 0;
+  run.readingComprehensionAnswer = null;
+  run.readingComprehensionQuestionIndex = 0;
+  run.readingOutputText = "";
+}
+
+function renderReadingMaterialSelector(container) {
+  const run = state.courseRun;
+  if (!run) return;
+
+  const activeMaterials = state.localReadingMaterials.filter((item) => !item.completed);
+  const completedCount = state.localReadingMaterials.length - activeMaterials.length;
+
+  if (!state.localReadingMaterials.length) {
+    container.innerHTML = `
+      <div class="reading-step-ui">
+        <div class="empty-state">
+          <p>登録済みの読解教材がありません。読解JSONをインポートしてください。</p>
+          <div class="mini-actions">
+            <button type="button" class="soft-button reading-selector-back">戻る</button>
+          </div>
+        </div>
+      </div>
+    `;
+    container.querySelector(".reading-selector-back")?.addEventListener("click", () => {
+      if (run.currentStepIndex > 0) {
+        goPreviousCourseStep();
+      } else {
+        resetCourseToSelect();
+      }
+    });
+    run.renderedStepIndex = run.currentStepIndex;
+    return;
+  }
+
+  if (!activeMaterials.length) {
+    container.innerHTML = `
+      <div class="reading-step-ui">
+        <div class="empty-state">
+          <p>未修了の読解教材がありません。</p>
+          <p class="muted">登録済み文章一覧で修了を解除するか、読解JSONを追加してください。</p>
+          <div class="mini-actions">
+            <button type="button" class="soft-button reading-selector-back">戻る</button>
+          </div>
+        </div>
+      </div>
+    `;
+    container.querySelector(".reading-selector-back")?.addEventListener("click", () => {
+      if (run.currentStepIndex > 0) {
+        goPreviousCourseStep();
+      } else {
+        resetCourseToSelect();
+      }
+    });
+    run.renderedStepIndex = run.currentStepIndex;
+    return;
+  }
+
+  const filters = readingSelectionFilters(container);
+  const languageOptions = uniqueReadingMaterialOptions(activeMaterials, readingMaterialLanguage);
+  const levelOptions = uniqueReadingMaterialOptions(activeMaterials, readingMaterialLevel);
+  const domainOptions = uniqueReadingMaterialOptions(activeMaterials, readingMaterialDomain);
+  const filteredMaterials = activeMaterials.filter((item) => readingMaterialMatchesFilter(item, filters));
+
+  container.innerHTML = `
+    <div class="reading-step-ui">
+      <section class="reading-selector-head">
+        <div>
+          <p class="eyebrow">Reading Material</p>
+          <h4>学習する読解教材を選択</h4>
+          <p class="muted">登録済みの読解教材から、この読解パートで使う教材を1つ選んでください。</p>
+        </div>
+        <div class="reading-selector-count">
+          <span>選択可能</span>
+          <strong>${escapeHtml(String(activeMaterials.length))}</strong>
+        </div>
+      </section>
+      <div class="reading-selector-filters">
+        <label>
+          言語
+          <select id="reading-material-language-filter">
+            <option value="">すべて</option>
+            ${languageOptions.map((value) => `<option value="${escapeHtml(value)}" ${filters.language === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          CEFR
+          <select id="reading-material-level-filter">
+            <option value="">すべて</option>
+            ${levelOptions.map((value) => `<option value="${escapeHtml(value)}" ${filters.level === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          領域
+          <select id="reading-material-domain-filter">
+            <option value="">すべて</option>
+            ${domainOptions.map((value) => `<option value="${escapeHtml(value)}" ${filters.domain === value ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      ${filteredMaterials.length ? `
+        <div class="reading-material-choice-list">
+          ${filteredMaterials.map((item) => `
+            <article class="reading-material-choice-card">
+              <div>
+                <h5>${escapeHtml(readingMaterialTitle(item))}</h5>
+                <dl>
+                  <dt>言語</dt><dd>${escapeHtml(readingMaterialLanguage(item))}</dd>
+                  <dt>CEFR</dt><dd>${escapeHtml(readingMaterialLevel(item))}</dd>
+                  <dt>領域</dt><dd>${escapeHtml(readingMaterialDomain(item))}</dd>
+                  <dt>推定時間</dt><dd>${escapeHtml(readingMaterialEstimatedTime(item))}</dd>
+                </dl>
+                <p>${escapeHtml(readingMaterialDescription(item))}</p>
+              </div>
+              <button type="button" class="reading-material-select-button" data-id="${escapeHtml(item.id || "")}">この教材で開始</button>
+            </article>
+          `).join("")}
+        </div>
+      ` : `
+        <div class="empty-state">
+          <p>条件に合う読解教材がありません。</p>
+          <p class="muted">フィルタを「すべて」に戻すと、登録済み教材を確認できます。</p>
+        </div>
+      `}
+      ${completedCount ? `<p class="muted">修了済みの教材 ${escapeHtml(String(completedCount))}件は選択対象から外しています。</p>` : ""}
+      <div class="mini-actions">
+        <button type="button" class="soft-button reading-selector-back">戻る</button>
+      </div>
+    </div>
+  `;
+
+  ["#reading-material-language-filter", "#reading-material-level-filter", "#reading-material-domain-filter"].forEach((selector) => {
+    container.querySelector(selector)?.addEventListener("change", () => renderReadingMaterialSelector(container));
+  });
+
+  container.querySelectorAll(".reading-material-select-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const selected = activeMaterials.find((item) => String(item.id || "") === button.dataset.id);
+      if (!selected) {
+        setStatus("選択した読解教材が見つかりません。再読み込みしてください。");
+        return;
+      }
+      resetReadingProgress(run);
+      run.readingMaterial = selected;
+      renderReadingCourseStep(container);
+      setStatus(`「${readingMaterialTitle(selected)}」で読解を開始しました。`);
+    });
+  });
+
+  container.querySelector(".reading-selector-back")?.addEventListener("click", () => {
+    if (run.currentStepIndex > 0) {
+      goPreviousCourseStep();
+    } else {
+      resetCourseToSelect();
+    }
+  });
+
+  run.renderedStepIndex = run.currentStepIndex;
+}
+
 const READING_SUB_STEPS = [
   { key: "firstReading",       label: "① 初読",                       description: "辞書を使わず、止まらずに読みましょう。完璧に理解しようとせず、全体の流れを掴むことを目標にしましょう。" },
   { key: "comprehension",      label: "② 確認設問",                   description: "初読でどれくらい意味を掴めたか確認します。" },
@@ -3670,6 +3904,7 @@ function renderReadingCourseStep(container) {
   const mat = run.readingMaterial;
   const subStep = run.readingSubStep;
   const stepInfo = READING_SUB_STEPS[subStep];
+  const bodyText = readingMaterialText(mat);
 
   if (!mat) {
     container.innerHTML = `
@@ -3701,12 +3936,12 @@ function renderReadingCourseStep(container) {
       </section>
       <section class="section-card">
         <h4>本文</h4>
-        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
+        <pre class="reading-text">${escapeHtml(bodyText || "")}</pre>
       </section>
       <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 確認設問へ</button></div>
     `;
   } else if (subStep === 1) {
-    const questions = mat.comprehensionQuestions || [];
+    const questions = safeArray(mat.comprehensionQuestions || mat.questions);
     if (!questions.length) {
       content = `
         <section class="section-card">
@@ -3725,7 +3960,7 @@ function renderReadingCourseStep(container) {
           <h4>${stepInfo.label}（${qi + 1} / ${questions.length}）</h4>
           <p>${escapeHtml(q.question || "")}</p>
           <div class="comprehension-choices">
-            ${(q.choices || []).map((choice) => `
+            ${safeArray(q.choices).map((choice) => `
               <button type="button" class="comprehension-choice ${answered === choice ? (choice === q.answer ? "correct" : "wrong") : ""}" data-choice="${escapeHtml(choice)}" ${answered ? "disabled" : ""}>
                 ${escapeHtml(choice)}
               </button>
@@ -3750,23 +3985,27 @@ function renderReadingCourseStep(container) {
     }
   } else if (subStep === 2) {
     const ir = mat.intensiveReading || {};
+    const vocabulary = safeArray(ir.vocabulary || mat.vocabulary);
+    const chunks = safeArray(ir.chunks);
+    const grammarPoints = safeArray(ir.grammarPoints);
+    const notes = safeArray(ir.notes);
     content = `
       <section class="section-card">
         <h4>${stepInfo.label}</h4>
       </section>
       <section class="section-card">
         <h4>本文</h4>
-        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
+        <pre class="reading-text">${escapeHtml(bodyText || "")}</pre>
       </section>
       <section class="section-card">
         <h4>日本語訳</h4>
         <p>${escapeHtml(mat.japaneseTranslation || "")}</p>
       </section>
-      ${ir.vocabulary?.length ? `
+      ${vocabulary.length ? `
         <section class="section-card">
           <h4>重要語彙</h4>
           <div class="vocab-chips">
-            ${ir.vocabulary.map((v) => `
+            ${vocabulary.map((v) => `
               <div class="vocab-chip">
                 <strong>${escapeHtml(v.word || "")}</strong>
                 ${v.pinyin ? `<span class="muted">${escapeHtml(v.pinyin)}</span>` : ""}
@@ -3778,11 +4017,11 @@ function renderReadingCourseStep(container) {
           </div>
         </section>
       ` : ""}
-      ${ir.chunks?.length ? `
+      ${chunks.length ? `
         <section class="section-card">
           <h4>チャンク・フレーズ</h4>
           <div class="chunk-list">
-            ${ir.chunks.map((c) => `
+            ${chunks.map((c) => `
               <div class="chunk-item">
                 <code>${escapeHtml(c.chunk || "")}</code>
                 <span>→ ${escapeHtml(c.meaningJa || "")}</span>
@@ -3792,10 +4031,10 @@ function renderReadingCourseStep(container) {
           </div>
         </section>
       ` : ""}
-      ${ir.grammarPoints?.length ? `
+      ${grammarPoints.length ? `
         <section class="section-card">
           <h4>文法ポイント</h4>
-          ${ir.grammarPoints.map((g) => `
+          ${grammarPoints.map((g) => `
             <div class="grammar-point">
               <strong>${escapeHtml(g.title || "")}</strong>
               <p>${escapeHtml(g.explanationJa || "")}</p>
@@ -3804,10 +4043,10 @@ function renderReadingCourseStep(container) {
           `).join("")}
         </section>
       ` : ""}
-      ${ir.notes?.length ? `
+      ${notes.length ? `
         <section class="section-card">
           <h4>補足メモ</h4>
-          <ul>${ir.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>
+          <ul>${notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>
         </section>
       ` : ""}
       <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">再読へ</button></div>
@@ -3823,14 +4062,14 @@ function renderReadingCourseStep(container) {
       </section>
       <section class="section-card">
         <h4>本文</h4>
-        <pre class="reading-text">${escapeHtml(mat.originalText || "")}</pre>
+        <pre class="reading-text">${escapeHtml(bodyText || "")}</pre>
       </section>
       <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 1文アウトプットへ</button></div>
     `;
   } else if (subStep === 4) {
     const out = mat.oneSentenceOutput || {};
-    const inst = out.instruction || stepInfo.description;
-    const exprs = out.recommendedExpressions || [];
+    const inst = out.instruction || mat.outputPrompt || stepInfo.description;
+    const exprs = safeArray(out.recommendedExpressions);
     content = `
       <section class="section-card">
         <h4>${stepInfo.label}</h4>
@@ -3849,7 +4088,7 @@ function renderReadingCourseStep(container) {
 
   container.innerHTML = `
     <div class="reading-step-ui">
-      <p class="eyebrow">${escapeHtml(mat.title || "読解教材")} ${mat.level ? `/ ${escapeHtml(mat.level)}` : ""}</p>
+      <p class="eyebrow">${escapeHtml(readingMaterialTitle(mat))} / ${escapeHtml(readingMaterialLevel(mat))}</p>
       ${subStepNav}
       ${content}
     </div>
@@ -3876,7 +4115,7 @@ function renderReadingCourseStep(container) {
 
   container.querySelector("#reading-tts-play")?.addEventListener("click", () => {
     const lang = mat.language === "zh" ? "zh-TW" : "en-US";
-    speakText(mat.originalText || "", { language: lang });
+    speakText(bodyText || "", { language: lang });
   });
 
   container.querySelector("#course-reading-output")?.addEventListener("input", syncCourseTextInputs);
@@ -3983,10 +4222,27 @@ function renderCourseStepUi(step) {
     run.readingSubStep = 0;
     run.readingComprehensionAnswer = null;
     run.readingComprehensionQuestionIndex = 0;
+    run.readingMaterial = null;
     run.renderedStepIndex = run.currentStepIndex; // タイマーループの重複呼び出しを防ぐ
+    elements.courseStepUi.innerHTML = `
+      <div class="reading-step-ui">
+        <p class="muted">読解教材を読み込んでいます...</p>
+      </div>
+    `;
     loadLocalReadingMaterials().then(() => {
-      if (!run.readingMaterial) run.readingMaterial = selectReadingMaterial();
-      renderReadingCourseStep(elements.courseStepUi);
+      if (state.courseRun === run && currentCourseStep()?.type === "reading") {
+        renderReadingMaterialSelector(elements.courseStepUi);
+      }
+    }).catch((error) => {
+      elements.courseStepUi.innerHTML = `
+        <div class="reading-step-ui">
+          <p class="auth-message auth-message--error">${escapeHtml(error.message || "読解教材の読み込みに失敗しました。")}</p>
+          <div class="mini-actions">
+            <button type="button" class="soft-button reading-selector-back">戻る</button>
+          </div>
+        </div>
+      `;
+      elements.courseStepUi.querySelector(".reading-selector-back")?.addEventListener("click", goPreviousCourseStep);
     });
     return;
   }
