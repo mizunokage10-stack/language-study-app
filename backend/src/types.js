@@ -55,6 +55,7 @@
  * @property {number} dictationCount
  * @property {number} recordingCount
  * @property {string} writingText
+ * @property {string} readingOutputText
  * @property {string} feedbackText
  * @property {string} note
  */

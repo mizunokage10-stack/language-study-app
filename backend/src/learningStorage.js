@@ -102,6 +102,7 @@ export function sanitizeLearningSession(session, existing = null) {
     dictationCount: toNumber(session.dictationCount, 0),
     recordingCount: toNumber(session.recordingCount, 0),
     writingText: session.writingText || "",
+    readingOutputText: session.readingOutputText || "",
     feedbackText: session.feedbackText || "",
     note: session.note || ""
   };
