@@ -608,10 +608,10 @@ async function handleSupabaseReadingMaterials(url, options = {}) {
       type: body.type || "reading_text",
       title: body.title || "",
       language: body.language || "en",
-      level: body.level || "",
-      domain: body.domain || "",
+      level: body.level || body.cefr || body.cefrLevel || body.cefr_level || "",
+      domain: body.domain || body.category || "",
       sourceNote: body.sourceNote || "",
-      originalText: body.originalText || "",
+      originalText: body.originalText || body.text || body.content || body.readingText || "",
       japaneseTranslation: body.japaneseTranslation || "",
       firstReading: body.firstReading || { targetSeconds: 90, instruction: "辞書を使わず、止まらずに読んでください。" },
       comprehensionQuestions: Array.isArray(body.comprehensionQuestions) ? body.comprehensionQuestions : [],
@@ -705,16 +705,16 @@ function validateReadingMaterialPayload(payload) {
     "type",
     "title",
     "language",
-    "level",
-    "domain",
-    "originalText",
-    "japaneseTranslation",
     "firstReading",
     "comprehensionQuestions",
     "intensiveReading",
     "rereading",
     "oneSentenceOutput"
   ];
+  const supportedLanguages = ["en", "english", "zh", "chinese", "fr", "french"];
+  const hasReadableText = Boolean(payload?.originalText || payload?.text || payload?.content || payload?.readingText);
+  const level = payload?.level || payload?.cefr || payload?.cefrLevel || payload?.cefr_level || "";
+  const language = String(payload?.language || "").toLowerCase();
 
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return false;
@@ -726,9 +726,10 @@ function validateReadingMaterialPayload(payload) {
 
   return (
     hasAllRequiredKeys &&
+    hasReadableText &&
     payload.type === "reading_text" &&
-    ["en", "zh"].includes(payload.language) &&
-    ["A1", "A2", "B1", "B2", "C1", "C2"].includes(payload.level)
+    supportedLanguages.includes(language) &&
+    ["A1", "A2", "B1", "B2", "C1", "C2"].includes(String(level).toUpperCase())
   );
 }
 
@@ -2403,10 +2404,10 @@ async function handleLocalJson(url, options = {}) {
       type: body.type || "reading_text",
       title: body.title || "",
       language: body.language || "en",
-      level: body.level || "",
-      domain: body.domain || "",
+      level: body.level || body.cefr || body.cefrLevel || body.cefr_level || "",
+      domain: body.domain || body.category || "",
       sourceNote: body.sourceNote || "",
-      originalText: body.originalText || "",
+      originalText: body.originalText || body.text || body.content || body.readingText || "",
       japaneseTranslation: body.japaneseTranslation || "",
       firstReading: body.firstReading || { targetSeconds: 90, instruction: "辞書を使わず、止まらずに読んでください。" },
       comprehensionQuestions: Array.isArray(body.comprehensionQuestions) ? body.comprehensionQuestions : [],
@@ -3664,6 +3665,291 @@ function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function blockTypeLabel(type = "") {
+  const labels = {
+    vocabulary: "語彙",
+    chunk: "チャンク",
+    grammar: "文法",
+    syntax: "構文",
+    nuance: "ニュアンス",
+    rhetoric: "レトリック",
+    culture: "文化",
+    output: "アウトプット"
+  };
+
+  return labels[type] || type || "精読";
+}
+
+function focusItemText(item = {}) {
+  return firstPresentValue(item, ["text", "word", "chunk", "sourceExpression", "expression", "pattern"]);
+}
+
+function focusItemExplanation(item = {}) {
+  return firstPresentValue(item, [
+    "explanationJa",
+    "noteJa",
+    "meaningJa",
+    "note",
+    "usageJa",
+    "teachingPointJa"
+  ]);
+}
+
+function focusItemMarkerClass(item = {}) {
+  const type = item.type || item.blockType || "";
+  const marker = item.marker || "";
+  if (marker === "underline" || type === "chunk") return "annotated-marker--chunk";
+  if (marker === "badge" || type === "grammar" || type === "syntax") return "annotated-marker--grammar";
+  return "annotated-marker--vocabulary";
+}
+
+function renderAnnotatedText(sourceText = "", focusItems = []) {
+  const source = String(sourceText || "");
+  if (!source) {
+    return `<p class="muted">該当本文は未設定です。</p>`;
+  }
+
+  const matches = [];
+  safeArray(focusItems).forEach((item, itemIndex) => {
+    const text = String(focusItemText(item) || "");
+    if (!text) return;
+
+    const index = source.indexOf(text);
+    if (index === -1) return;
+    matches.push({
+      index,
+      end: index + text.length,
+      item,
+      itemIndex
+    });
+  });
+
+  matches.sort((a, b) => a.index - b.index || b.end - a.end);
+
+  const selected = [];
+  let cursor = 0;
+  matches.forEach((match) => {
+    if (match.index < cursor) return;
+    selected.push(match);
+    cursor = match.end;
+  });
+
+  if (!selected.length) {
+    return `<pre class="reading-annotated-text">${escapeHtml(source)}</pre>`;
+  }
+
+  let rendered = "";
+  cursor = 0;
+  selected.forEach((match) => {
+    rendered += escapeHtml(source.slice(cursor, match.index));
+    rendered += `<mark class="annotated-marker ${focusItemMarkerClass(match.item)}">${escapeHtml(source.slice(match.index, match.end))}</mark>`;
+    cursor = match.end;
+  });
+  rendered += escapeHtml(source.slice(cursor));
+
+  return `<pre class="reading-annotated-text">${rendered}</pre>`;
+}
+
+function renderFocusItems(focusItems = []) {
+  const items = safeArray(focusItems).filter((item) => focusItemText(item) || focusItemExplanation(item));
+  if (!items.length) return "";
+
+  return `
+    <div class="reading-focus-list">
+      ${items.map((item) => {
+        const type = item.type || item.blockType || "vocabulary";
+        const text = focusItemText(item);
+        const explanation = focusItemExplanation(item);
+        return `
+          <div class="reading-focus-item reading-focus-item--${escapeHtml(type)}">
+            <span class="reading-focus-type">${escapeHtml(blockTypeLabel(type))}</span>
+            ${text ? `<strong>${escapeHtml(text)}</strong>` : ""}
+            ${item.meaningJa && item.meaningJa !== explanation ? `<span>${escapeHtml(item.meaningJa)}</span>` : ""}
+            ${explanation ? `<p>${escapeHtml(explanation)}</p>` : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function legacyIntensiveBlocks(ir = {}, bodyText = "") {
+  const vocabulary = safeArray(ir.vocabulary);
+  const chunks = safeArray(ir.chunks);
+  const grammarPoints = safeArray(ir.grammarPoints);
+  const notes = safeArray(ir.notes);
+
+  if (!vocabulary.length && !chunks.length && !grammarPoints.length && !notes.length) {
+    return [];
+  }
+
+  return [
+    {
+      id: "legacy-overview",
+      title: "本文全体の重要語彙・チャンク・文法",
+      blockType: "grammar",
+      sourceText: bodyText,
+      focusItems: [
+        ...vocabulary.map((item) => ({
+          type: "vocabulary",
+          text: item.word || item.text || "",
+          meaningJa: item.meaningJa || "",
+          noteJa: item.note || "",
+          marker: "highlight"
+        })),
+        ...chunks.map((item) => ({
+          type: "chunk",
+          text: item.chunk || item.text || "",
+          meaningJa: item.meaningJa || "",
+          noteJa: item.note || "",
+          marker: "underline"
+        })),
+        ...grammarPoints.map((item) => ({
+          type: "grammar",
+          text: item.example || item.sourceExpression || item.title || "",
+          explanationJa: item.explanationJa || item.note || "",
+          marker: "badge"
+        }))
+      ],
+      explanationJa: notes.join("\n")
+    }
+  ];
+}
+
+function precisionGrammarTitle(language = "") {
+  return String(language || "").toLowerCase().startsWith("zh")
+    ? "高级句法与课堂解释｜精密文法・構文解説"
+    : "Grammaire de précision｜精密文法・構文解説";
+}
+
+function renderPrecisionGrammar(items = [], language = "") {
+  const rows = safeArray(items).filter((item) => item.title || item.sourceExpression || item.explanationJa);
+  if (!rows.length) return "";
+
+  return `
+    <section class="section-card reading-deep-section">
+      <h4>${escapeHtml(precisionGrammarTitle(language))}</h4>
+      <div class="reading-deep-grid">
+        ${rows.map((item) => `
+          <article class="reading-deep-card">
+            <h5>${escapeHtml(item.title || item.sourceExpression || "精密文法")}</h5>
+            ${item.sourceExpression ? `<code>${escapeHtml(item.sourceExpression)}</code>` : ""}
+            ${item.explanationJa ? `<p>${escapeHtml(item.explanationJa)}</p>` : ""}
+            ${item.whyThisFormJa ? `<p><strong>なぜこの形か：</strong>${escapeHtml(item.whyThisFormJa)}</p>` : ""}
+            ${item.alternativeExpression ? `<p><strong>別表現：</strong>${escapeHtml(item.alternativeExpression)}</p>` : ""}
+            ${item.cognitiveNoteJa ? `<p><strong>認知効果：</strong>${escapeHtml(item.cognitiveNoteJa)}</p>` : ""}
+            ${item.teachingPointJa ? `<p><strong>説明の型：</strong>${escapeHtml(item.teachingPointJa)}</p>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderPatternExpansion(items = []) {
+  const rows = safeArray(items).filter((item) => item.pattern || item.example || item.usageJa);
+  if (!rows.length) return "";
+
+  return `
+    <section class="section-card reading-deep-section">
+      <h4>句型扩展｜作文・発表に使える型</h4>
+      <div class="reading-pattern-list">
+        ${rows.map((item) => `
+          <article class="reading-pattern-card">
+            ${item.pattern ? `<code>${escapeHtml(item.pattern)}</code>` : ""}
+            ${item.usageJa ? `<p><strong>使いどころ：</strong>${escapeHtml(item.usageJa)}</p>` : ""}
+            ${item.example ? `<p>${escapeHtml(item.example)}</p>` : ""}
+            ${item.exampleJa ? `<p class="muted">${escapeHtml(item.exampleJa)}</p>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderBilingualSummary(summary = {}) {
+  if (!summary?.summaryTargetLanguage && !summary?.summaryJa) return "";
+
+  return `
+    <section class="section-card reading-deep-section">
+      <h4>Résumé bilingue｜二言語小結</h4>
+      <div class="reading-summary-pair">
+        ${summary.summaryTargetLanguage ? `<p>${escapeHtml(summary.summaryTargetLanguage)}</p>` : ""}
+        ${summary.summaryJa ? `<p class="muted">${escapeHtml(summary.summaryJa)}</p>` : ""}
+      </div>
+    </section>
+  `;
+}
+
+function renderMemorization(memorization = {}) {
+  if (!memorization?.memorizationParagraph && !safeArray(memorization?.memoryCues).length) return "";
+
+  return `
+    <section class="section-card reading-deep-section">
+      <h4>À mémoriser｜暗唱ミニ段落</h4>
+      ${memorization.memorizationParagraph ? `<p class="reading-memory-text">${escapeHtml(memorization.memorizationParagraph)}</p>` : ""}
+      ${safeArray(memorization.memoryCues).length ? `
+        <div class="focus-chunks">
+          ${safeArray(memorization.memoryCues).map((cue) => `<code>${escapeHtml(cue)}</code>`).join("")}
+        </div>
+      ` : ""}
+      ${memorization.instructionJa ? `<p class="muted">${escapeHtml(memorization.instructionJa)}</p>` : ""}
+    </section>
+  `;
+}
+
+function renderIntensiveReadingStep(mat, bodyText, stepInfo) {
+  const ir = mat.intensiveReading || {};
+  const blocks = safeArray(ir.blocks).length ? safeArray(ir.blocks) : legacyIntensiveBlocks(ir, bodyText);
+  const hasNewLayout = safeArray(ir.blocks).length > 0;
+
+  return `
+    <section class="section-card reading-intensive-guide">
+      <h4>${escapeHtml(stepInfo.label)}</h4>
+      <p>本文の順番に沿って、語彙・チャンク・文法を確認します。全文訳に頼らず、本文の中で意味を取る練習をします。</p>
+    </section>
+    ${blocks.length ? `
+      <div class="reading-annotation-sequence">
+        ${blocks.map((block, index) => {
+          const focusItems = safeArray(block.focusItems);
+          const sourceText = block.sourceText || block.text || block.sentence || bodyText;
+          return `
+            <section class="section-card reading-annotation-block">
+              <div class="reading-block-head">
+                <span class="reading-block-index">Block ${escapeHtml(String(index + 1))}</span>
+                <span class="reading-block-type">${escapeHtml(blockTypeLabel(block.blockType))}</span>
+              </div>
+              <h4>${escapeHtml(block.title || `精読ブロック ${index + 1}`)}</h4>
+              <div class="reading-annotation-layout">
+                <div>
+                  <p class="eyebrow">Texte annoté</p>
+                  ${renderAnnotatedText(sourceText, focusItems)}
+                </div>
+                <div>
+                  <p class="eyebrow">Grammaire + lexique + intentions</p>
+                  ${renderFocusItems(focusItems)}
+                  ${block.explanationJa ? `<p class="reading-block-note">${escapeHtml(block.explanationJa)}</p>` : ""}
+                  ${block.miniCheck ? `<p class="reading-mini-check"><strong>ミニ確認：</strong>${escapeHtml(block.miniCheck)}</p>` : ""}
+                </div>
+              </div>
+            </section>
+          `;
+        }).join("")}
+      </div>
+    ` : `
+      <section class="section-card">
+        <p class="muted">精読用の注釈データが登録されていません。</p>
+      </section>
+    `}
+    ${renderPrecisionGrammar(ir.precisionGrammar, mat.language)}
+    ${renderPatternExpansion(ir.patternExpansion)}
+    ${renderBilingualSummary(ir.bilingualSummary)}
+    ${renderMemorization(ir.memorization)}
+    ${!hasNewLayout ? `<p class="muted">旧形式の語彙・チャンク・文法データを、本文注釈形式に近い形で表示しています。</p>` : ""}
+    <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">再読へ</button></div>
+  `;
+}
+
 function readingMaterialTitle(item) {
   return firstPresentValue(item, ["title", "name"]) || "タイトル未設定";
 }
@@ -3984,73 +4270,7 @@ function renderReadingCourseStep(container) {
       `;
     }
   } else if (subStep === 2) {
-    const ir = mat.intensiveReading || {};
-    const vocabulary = safeArray(ir.vocabulary || mat.vocabulary);
-    const chunks = safeArray(ir.chunks);
-    const grammarPoints = safeArray(ir.grammarPoints);
-    const notes = safeArray(ir.notes);
-    content = `
-      <section class="section-card">
-        <h4>${stepInfo.label}</h4>
-      </section>
-      <section class="section-card">
-        <h4>本文</h4>
-        <pre class="reading-text">${escapeHtml(bodyText || "")}</pre>
-      </section>
-      <section class="section-card">
-        <h4>日本語訳</h4>
-        <p>${escapeHtml(mat.japaneseTranslation || "")}</p>
-      </section>
-      ${vocabulary.length ? `
-        <section class="section-card">
-          <h4>重要語彙</h4>
-          <div class="vocab-chips">
-            ${vocabulary.map((v) => `
-              <div class="vocab-chip">
-                <strong>${escapeHtml(v.word || "")}</strong>
-                ${v.pinyin ? `<span class="muted">${escapeHtml(v.pinyin)}</span>` : ""}
-                <span class="muted">（${escapeHtml(v.partOfSpeech || "")}）</span>
-                <span>${escapeHtml(v.meaningJa || "")}</span>
-                ${v.note ? `<p class="muted">${escapeHtml(v.note)}</p>` : ""}
-              </div>
-            `).join("")}
-          </div>
-        </section>
-      ` : ""}
-      ${chunks.length ? `
-        <section class="section-card">
-          <h4>チャンク・フレーズ</h4>
-          <div class="chunk-list">
-            ${chunks.map((c) => `
-              <div class="chunk-item">
-                <code>${escapeHtml(c.chunk || "")}</code>
-                <span>→ ${escapeHtml(c.meaningJa || "")}</span>
-                ${c.note ? `<p class="muted">${escapeHtml(c.note)}</p>` : ""}
-              </div>
-            `).join("")}
-          </div>
-        </section>
-      ` : ""}
-      ${grammarPoints.length ? `
-        <section class="section-card">
-          <h4>文法ポイント</h4>
-          ${grammarPoints.map((g) => `
-            <div class="grammar-point">
-              <strong>${escapeHtml(g.title || "")}</strong>
-              <p>${escapeHtml(g.explanationJa || "")}</p>
-              ${g.example ? `<p class="muted">${escapeHtml(g.example)}</p>` : ""}
-            </div>
-          `).join("")}
-        </section>
-      ` : ""}
-      ${notes.length ? `
-        <section class="section-card">
-          <h4>補足メモ</h4>
-          <ul>${notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>
-        </section>
-      ` : ""}
-      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">再読へ</button></div>
-    `;
+    content = renderIntensiveReadingStep(mat, bodyText, stepInfo);
   } else if (subStep === 3) {
     const target = mat.rereading?.targetSeconds || 60;
     const inst = mat.rereading?.instruction || stepInfo.description;

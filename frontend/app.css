@@ -589,6 +589,113 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
 .focus-chunks code { font-family: monospace; font-size: 0.88em; background: rgba(196,113,245,0.2); padding: 2px 8px; border-radius: 10px; }
 .chatgpt-prompt-box { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-top: 8px; }
 
+.reading-intensive-guide p { margin: 0; color: rgba(255,255,255,0.72); line-height: 1.7; }
+.reading-annotation-sequence { display: grid; gap: 12px; }
+.reading-annotation-block { display: grid; gap: 12px; }
+.reading-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.reading-block-index,
+.reading-block-type,
+.reading-focus-type {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: rgba(255,255,255,0.82);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.reading-block-type { background: rgba(196,113,245,0.16); border-color: rgba(196,113,245,0.28); }
+.reading-annotation-layout {
+  display: grid;
+  grid-template-columns: minmax(0,1.15fr) minmax(260px,0.85fr);
+  gap: 14px;
+  align-items: start;
+}
+.reading-annotated-text {
+  white-space: pre-wrap;
+  line-height: 1.9;
+  font-family: inherit;
+  font-size: 1rem;
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(10,18,32,0.48);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.annotated-marker {
+  color: inherit;
+  border-radius: 4px;
+  padding: 0 2px;
+  background: transparent;
+}
+.annotated-marker--vocabulary { background: rgba(245,210,91,0.34); box-shadow: inset 0 -0.18em rgba(245,210,91,0.42); }
+.annotated-marker--chunk { border-bottom: 2px solid rgba(81,179,255,0.88); }
+.annotated-marker--grammar { background: rgba(196,113,245,0.2); border: 1px solid rgba(196,113,245,0.42); }
+.reading-focus-list { display: grid; gap: 8px; }
+.reading-focus-item {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+}
+.reading-focus-item strong { color: white; }
+.reading-focus-item p { margin: 0; line-height: 1.65; color: rgba(255,255,255,0.68); }
+.reading-block-note,
+.reading-mini-check {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border-left: 3px solid rgba(196,113,245,0.56);
+  white-space: pre-wrap;
+  line-height: 1.65;
+}
+.reading-deep-section { display: grid; gap: 12px; }
+.reading-deep-grid,
+.reading-pattern-list {
+  display: grid;
+  gap: 10px;
+}
+.reading-deep-card,
+.reading-pattern-card {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.reading-deep-card h5 { margin: 0; color: white; font-size: 0.98rem; }
+.reading-deep-card p,
+.reading-pattern-card p,
+.reading-summary-pair p { margin: 0; line-height: 1.7; }
+.reading-deep-card code,
+.reading-pattern-card code {
+  width: fit-content;
+  max-width: 100%;
+  white-space: pre-wrap;
+  font-family: monospace;
+  color: #d6f0ff;
+  background: rgba(81,179,255,0.14);
+  border: 1px solid rgba(81,179,255,0.24);
+  border-radius: 8px;
+  padding: 3px 8px;
+}
+.reading-summary-pair { display: grid; gap: 8px; }
+.reading-memory-text {
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(245,210,91,0.1);
+  border: 1px solid rgba(245,210,91,0.2);
+  line-height: 1.8;
+}
+
 /* ── Course lang select ── */
 .course-lang-select-row { display: flex; align-items: center; justify-content: center; padding: 8px 0; }
 .course-lang-label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 1em; }
@@ -667,7 +774,8 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
 @media (max-width: 760px) {
   .reading-selector-head,
   .reading-selector-filters,
-  .reading-material-choice-card {
+  .reading-material-choice-card,
+  .reading-annotation-layout {
     grid-template-columns: 1fr;
   }
   .reading-selector-count {
