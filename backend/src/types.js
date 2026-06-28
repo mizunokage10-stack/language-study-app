@@ -56,6 +56,7 @@
  * @property {number} recordingCount
  * @property {string} writingText
  * @property {string} readingOutputText
+ * @property {object[]} readingWritingResponses
  * @property {string} feedbackText
  * @property {string} note
  */

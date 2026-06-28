@@ -663,7 +663,122 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
   border-radius: 8px;
   padding: 3px 8px;
 }
-.reading-writing-selfcheck { background: rgba(255,255,255,0.035); }
+.pinyin,
+.reading-pinyin {
+  margin: 2px 0 0;
+  color: rgba(214,240,255,0.72);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.reading-writing-example-list { display: grid; gap: 6px; }
+.reading-writing-example-list p { display: grid; gap: 2px; }
+.reading-writing-worksheet { display: grid; gap: 12px; }
+.reading-writing-worksheet-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.11);
+}
+.reading-writing-worksheet-card p { margin: 0; line-height: 1.7; }
+.reading-writing-worksheet-head {
+  display: grid;
+  gap: 4px;
+}
+.reading-writing-worksheet-head span {
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(81,179,255,0.13);
+  border: 1px solid rgba(81,179,255,0.25);
+  color: rgba(214,240,255,0.92);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.reading-writing-worksheet-head h5 {
+  margin: 0;
+  color: white;
+  font-size: 1rem;
+}
+.reading-writing-template,
+.reading-writing-starter {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(10,18,32,0.42);
+  border: 1px solid rgba(255,255,255,0.09);
+  line-height: 1.75;
+}
+.reading-writing-starter { display: grid; gap: 4px; }
+.reading-writing-blank-list { display: grid; gap: 8px; }
+.reading-writing-blank {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+.reading-writing-blank span {
+  color: rgba(255,255,255,0.78);
+  font-size: 0.9rem;
+}
+.reading-writing-blank input,
+.reading-writing-task-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.reading-writing-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.reading-writing-hint {
+  display: inline-grid;
+  gap: 2px;
+  max-width: 100%;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(245,210,91,0.09);
+  border: 1px solid rgba(245,210,91,0.18);
+}
+.reading-writing-hint strong { color: #ffd885; overflow-wrap: anywhere; }
+.reading-writing-hint small { color: rgba(255,255,255,0.72); line-height: 1.4; }
+.reading-writing-comparison {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+.reading-writing-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+}
+.reading-writing-compare-card,
+.reading-writing-point {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.09);
+}
+.reading-writing-compare-card h6 {
+  margin: 0 0 6px;
+  color: white;
+  font-size: 0.9rem;
+}
+.reading-writing-compare-card p,
+.reading-writing-point p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reading-writing-point strong { color: #ffd885; }
+.reading-writing-history-list { display: grid; gap: 10px; }
+.reading-writing-history-list > div {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
 
 .reading-intensive-guide p { margin: 0; color: rgba(255,255,255,0.72); line-height: 1.7; }
 .reading-annotation-sequence { display: grid; gap: 12px; }
@@ -851,7 +966,8 @@ th { color: rgba(255,255,255,0.45); font-size: 0.85rem; }
   .reading-selector-head,
   .reading-selector-filters,
   .reading-material-choice-card,
-  .reading-annotation-layout {
+  .reading-annotation-layout,
+  .reading-writing-compare-grid {
     grid-template-columns: 1fr;
   }
   .reading-selector-count {

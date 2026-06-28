@@ -2,6 +2,11 @@ function formatSupabaseError(action, error) {
   return `Supabase${action}に失敗しました: ${error.message || "詳細不明のエラー"}`;
 }
 
+function isMissingSupabaseColumnError(error) {
+  const message = String(error?.message || "");
+  return error?.code === "PGRST204" || /column|schema cache/i.test(message);
+}
+
 function normalizeLearningLanguage(language = "") {
   const normalized = String(language || "").toLowerCase();
   if (normalized === "en" || normalized === "english") return "english";
@@ -121,6 +126,8 @@ function toLearningSession(row) {
     dictationCount: Number(row.dictation_count || 0),
     recordingCount: Number(row.recording_count || 0),
     writingText: row.writing_text || "",
+    readingOutputText: row.reading_output_text || "",
+    readingWritingResponses: Array.isArray(row.reading_writing_responses) ? row.reading_writing_responses : [],
     feedbackText: row.feedback_text || "",
     note: row.note || "",
     createdAt: row.created_at || "",
@@ -128,8 +135,8 @@ function toLearningSession(row) {
   };
 }
 
-function toLearningSessionRow(session, userId) {
-  return {
+function toLearningSessionRow(session, userId, { includeReadingWriting = false } = {}) {
+  const row = {
     user_id: userId,
     date: session.date || todayIsoDate(),
     course_id: session.courseId || "",
@@ -146,6 +153,13 @@ function toLearningSessionRow(session, userId) {
     feedback_text: session.feedbackText || "",
     note: session.note || ""
   };
+
+  if (includeReadingWriting) {
+    row.reading_output_text = session.readingOutputText || "";
+    row.reading_writing_responses = Array.isArray(session.readingWritingResponses) ? session.readingWritingResponses : [];
+  }
+
+  return row;
 }
 
 function toStudyLog(row) {
@@ -640,11 +654,21 @@ export function createRepositories({
 
     async createLearningSession(payload) {
       const user = getSupabaseUser();
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("learning_sessions")
-        .insert(toLearningSessionRow(payload, user.id))
+        .insert(toLearningSessionRow(payload, user.id, { includeReadingWriting: true }))
         .select("*")
         .single();
+
+      if (error && isMissingSupabaseColumnError(error)) {
+        const retry = await supabase
+          .from("learning_sessions")
+          .insert(toLearningSessionRow(payload, user.id))
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
 
       if (error) {
         throw new Error(formatSupabaseError("保存", error));

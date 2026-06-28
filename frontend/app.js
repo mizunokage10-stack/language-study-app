@@ -218,8 +218,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-30"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-30"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
-      { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-30"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading + COURSE_PART_MINUTES["course-30"].writing,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" }
     ]
   },
   {
@@ -230,8 +229,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-60"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-60"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
-      { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-60"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading + COURSE_PART_MINUTES["course-60"].writing,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" }
     ]
   },
   {
@@ -242,8 +240,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-90"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-90"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
-      { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-90"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading + COURSE_PART_MINUTES["course-90"].writing,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" }
     ]
   },
   {
@@ -254,8 +251,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",         type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-120"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。SRS優先順位の高い単語を重点的に練習します。" },
       { id: "listening", title: "リスニング",       type: "listening",  minutes: COURSE_PART_MINUTES["course-120"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。音声の速度を変えながら複数回聞きましょう。" },
-      { id: "reading",   title: "読解",             type: "reading",    minutes: COURSE_PART_MINUTES["course-120"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
-      { id: "writing",   title: "作文・アウトプット", type: "writing",    minutes: COURSE_PART_MINUTES["course-120"].writing,   instructions: "今日学んだ単語・表現を使って、段落レベルの文章を書きます。文法・語彙・構造を意識して書いてください。" }
+      { id: "reading",   title: "読解",             type: "reading",    minutes: COURSE_PART_MINUTES["course-120"].reading + COURSE_PART_MINUTES["course-120"].writing,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" }
     ]
   }
 ];
@@ -2263,6 +2259,7 @@ async function handleLocalJson(url, options = {}) {
       recordingCount: Number(body.recordingCount || 0),
       writingText: body.writingText || "",
       readingOutputText: body.readingOutputText || "",
+      readingWritingResponses: Array.isArray(body.readingWritingResponses) ? body.readingWritingResponses : [],
       feedbackText: body.feedbackText || "",
       note: body.note || "",
       createdAt: timestamp,
@@ -3146,6 +3143,7 @@ function createCourseRun(course) {
     readingComprehensionAnswer: null,
     readingComprehensionQuestionIndex: 0,
     readingOutputText: "",
+    readingWritingResponses: {},
     startedAt: new Date().toISOString(),
     stepStartedAt: new Date().toISOString(),
     stepEndsAt: null
@@ -3244,6 +3242,45 @@ function syncCourseTextInputs() {
 
   const readingOutputInput = document.querySelector("#course-reading-output");
   if (readingOutputInput) state.courseRun.readingOutputText = readingOutputInput.value;
+}
+
+function updateReadingWritingSummary(run) {
+  if (!run) return;
+  const task = run.readingMaterial ? normalizeReadingWritingTask(run.readingMaterial) : null;
+  if (!task?.tasks?.length) return;
+  run.readingOutputText = task.tasks
+    .map((worksheetTask) => {
+      const response = getReadingWritingResponse(run, worksheetTask);
+      const answer = worksheetUserAnswer(worksheetTask, response);
+      return answer ? `${worksheetTask.title || writingTaskTypeLabel(worksheetTask.type)}: ${answer}` : "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function serializedReadingWritingResponses(run) {
+  if (!run?.readingMaterial) return [];
+  const task = normalizeReadingWritingTask(run.readingMaterial);
+  if (!task.tasks.length) return [];
+  return task.tasks.map((worksheetTask) => {
+    const response = getReadingWritingResponse(run, worksheetTask);
+    return {
+      readingMaterialId: run.readingMaterial.id || "",
+      writingTaskTitle: task.title || "",
+      taskId: worksheetTask.id,
+      taskType: worksheetTask.type,
+      userAnswer: worksheetUserAnswer(worksheetTask, response),
+      blankAnswers: response.blankAnswers || {},
+      modelAnswer: worksheetTask.modelAnswer || "",
+      modelAnswerPinyin: worksheetTask.modelAnswerPinyin || "",
+      explanationJa: worksheetTask.explanationJa || "",
+      submittedAt: response.submittedAt || "",
+      language: readingMaterialLanguage(run.readingMaterial),
+      level: readingMaterialLevel(run.readingMaterial),
+      domain: readingMaterialDomain(run.readingMaterial),
+      courseSessionId: run.startedAt || ""
+    };
+  });
 }
 
 function advanceCourseStep() {
@@ -3757,7 +3794,7 @@ function renderAnnotatedText(sourceText = "", focusItems = []) {
 }
 
 function renderFocusItems(focusItems = []) {
-  const items = safeArray(focusItems).filter((item) => focusItemText(item) || focusItemExplanation(item));
+  const items = safeArray(focusItems).filter((item) => focusItemText(item) || item.pinyin || focusItemExplanation(item));
   if (!items.length) return "";
 
   return `
@@ -3770,6 +3807,7 @@ function renderFocusItems(focusItems = []) {
           <div class="reading-focus-item reading-focus-item--${escapeHtml(type)}">
             <span class="reading-focus-type">${escapeHtml(blockTypeLabel(type))}</span>
             ${text ? `<strong>${escapeHtml(text)}</strong>` : ""}
+            ${renderPinyin(item.pinyin, "reading-pinyin")}
             ${item.meaningJa && item.meaningJa !== explanation ? `<span>${escapeHtml(item.meaningJa)}</span>` : ""}
             ${explanation ? `<p>${escapeHtml(explanation)}</p>` : ""}
           </div>
@@ -3865,6 +3903,7 @@ function renderPatternExpansion(items = []) {
             ${item.pattern ? `<code>${escapeHtml(item.pattern)}</code>` : ""}
             ${item.usageJa ? `<p><strong>使いどころ：</strong>${escapeHtml(item.usageJa)}</p>` : ""}
             ${item.example ? `<p>${escapeHtml(item.example)}</p>` : ""}
+            ${renderPinyin(item.examplePinyin, "reading-pinyin")}
             ${item.exampleJa ? `<p class="muted">${escapeHtml(item.exampleJa)}</p>` : ""}
           </article>
         `).join("")}
@@ -3881,6 +3920,7 @@ function renderBilingualSummary(summary = {}) {
       <h4>Résumé bilingue｜二言語小結</h4>
       <div class="reading-summary-pair">
         ${summary.summaryTargetLanguage ? `<p>${escapeHtml(summary.summaryTargetLanguage)}</p>` : ""}
+        ${renderPinyin(summary.summaryTargetLanguagePinyin, "reading-pinyin")}
         ${summary.summaryJa ? `<p class="muted">${escapeHtml(summary.summaryJa)}</p>` : ""}
       </div>
     </section>
@@ -3894,6 +3934,7 @@ function renderMemorization(memorization = {}) {
     <section class="section-card reading-deep-section">
       <h4>À mémoriser｜暗唱ミニ段落</h4>
       ${memorization.memorizationParagraph ? `<p class="reading-memory-text">${escapeHtml(memorization.memorizationParagraph)}</p>` : ""}
+      ${renderPinyin(memorization.memorizationParagraphPinyin, "reading-pinyin")}
       ${safeArray(memorization.memoryCues).length ? `
         <div class="focus-chunks">
           ${safeArray(memorization.memoryCues).map((cue) => `<code>${escapeHtml(cue)}</code>`).join("")}
@@ -3930,6 +3971,7 @@ function renderIntensiveReadingStep(mat, bodyText, stepInfo) {
                 <div>
                   <p class="eyebrow">Texte annoté</p>
                   ${renderAnnotatedText(sourceText, focusItems)}
+                  ${renderPinyin(block.sourceTextPinyin || block.pinyin, "reading-pinyin")}
                 </div>
                 <div>
                   <p class="eyebrow">Grammaire + lexique + intentions</p>
@@ -4021,6 +4063,7 @@ function resetReadingProgress(run) {
   run.readingComprehensionAnswer = null;
   run.readingComprehensionQuestionIndex = 0;
   run.readingOutputText = "";
+  run.readingWritingResponses = {};
 }
 
 function renderReadingMaterialSelector(container) {
@@ -4181,17 +4224,18 @@ function normalizeReadingWritingTask(mat) {
   const legacy = mat.oneSentenceOutput || {};
   const task = mat.writingTask || mat.readingWritingTask || {};
   const hasStructuredTask = Boolean(mat.writingTask || mat.readingWritingTask);
-  const recommendedExpressions = safeArray(task.recommendedExpressions || legacy.recommendedExpressions);
+  const recommendedExpressions = safeArray(task.recommendedExpressions || legacy.recommendedExpressions).map(normalizeWritingExpression).filter(hasWritingExpression);
   const keyVocabulary = safeArray(task.keyVocabulary || task.vocabulary).map((item) => {
     if (typeof item === "string") {
-      return { term: item, meaningJa: "" };
+      return { term: item, pinyin: "", meaningJa: "" };
     }
     return {
       term: item.term || item.word || item.expression || item.text || "",
+      pinyin: item.pinyin || "",
       meaningJa: item.meaningJa || item.meaning || item.translationJa || item.translation || "",
       noteJa: item.noteJa || item.note || ""
     };
-  }).filter((item) => item.term || item.meaningJa);
+  }).filter((item) => item.term || item.pinyin || item.meaningJa);
 
   return {
     title: task.title || legacy.title || "読解作文",
@@ -4208,23 +4252,224 @@ function normalizeReadingWritingTask(mat) {
       return {
         title: item.title || item.name || item.pattern || "",
         pattern: item.pattern || item.sourceExpression || "",
+        pinyin: item.pinyin || "",
         explanationJa: item.explanationJa || item.usageJa || item.noteJa || item.explanation || "",
-        examples: safeArray(item.examples || (item.example ? [item.example] : []))
+        examples: safeArray(item.examples || (item.example ? [item.example] : [])).map(normalizeWritingExample).filter(hasWritingExpression)
       };
-    }).filter((item) => item.title || item.pattern || item.explanationJa || item.examples.length),
+    }).filter((item) => item.title || item.pattern || item.pinyin || item.explanationJa || item.examples.length),
     structure: safeArray(task.structure || task.sections),
     recommendedExpressions,
-    checklist: safeArray(task.checklist || task.selfCheck)
+    tasks: safeArray(task.tasks).map(normalizeReadingWritingWorksheetTask).filter((item) => item.id || item.type || item.title)
   };
+}
+
+function normalizeWritingExpression(item) {
+  if (typeof item === "string") {
+    return { text: item, pinyin: "", meaningJa: "" };
+  }
+  return {
+    text: item?.text || item?.term || item?.word || item?.expression || item?.pattern || "",
+    pinyin: item?.pinyin || "",
+    meaningJa: item?.meaningJa || item?.meaning || item?.translationJa || item?.exampleJa || ""
+  };
+}
+
+function normalizeWritingExample(item) {
+  if (typeof item === "string") {
+    return { text: item, pinyin: "", meaningJa: "" };
+  }
+  return {
+    text: item?.text || item?.example || "",
+    pinyin: item?.pinyin || item?.examplePinyin || "",
+    meaningJa: item?.meaningJa || item?.exampleJa || item?.translationJa || ""
+  };
+}
+
+function hasWritingExpression(item) {
+  return Boolean(item?.text || item?.pinyin || item?.meaningJa);
+}
+
+function normalizeReadingWritingWorksheetTask(task, index) {
+  const type = task?.type || "guided_writing";
+  const id = task?.id || `${type}-${index + 1}`;
+  return {
+    ...task,
+    id,
+    type,
+    title: task?.title || writingTaskTypeLabel(type),
+    instructionJa: task?.instructionJa || task?.instruction || "",
+    promptJa: task?.promptJa || task?.prompt || "",
+    hints: safeArray(task?.hints).map(normalizeWritingExpression).filter(hasWritingExpression),
+    requiredExpressions: safeArray(task?.requiredExpressions).map(normalizeWritingExpression).filter(hasWritingExpression),
+    blanks: safeArray(task?.blanks).map((blank, blankIndex) => ({
+      id: blank?.id || `blank-${blankIndex + 1}`,
+      hintJa: blank?.hintJa || blank?.hint || "",
+      answer: blank?.answer || "",
+      answerPinyin: blank?.answerPinyin || ""
+    }))
+  };
+}
+
+function writingTaskTypeLabel(type = "") {
+  const labels = {
+    fill_blank: "空所補充",
+    sentence_completion: "文を完成させる",
+    guided_writing: "ヒント付き短文作文",
+    short_output: "短い作文"
+  };
+  return labels[type] || "作文練習";
+}
+
+function renderPinyin(value, className = "pinyin") {
+  return value ? `<p class="${className}">${escapeHtml(value)}</p>` : "";
+}
+
+function renderExpressionChips(items = []) {
+  const rows = safeArray(items).filter(hasWritingExpression);
+  if (!rows.length) return "";
+  return `
+    <div class="reading-writing-hints">
+      ${rows.map((item) => `
+        <span class="reading-writing-hint">
+          ${item.text ? `<strong>${escapeHtml(item.text)}</strong>` : ""}
+          ${item.pinyin ? `<small class="pinyin">${escapeHtml(item.pinyin)}</small>` : ""}
+          ${item.meaningJa ? `<small>${escapeHtml(item.meaningJa)}</small>` : ""}
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function getReadingWritingResponse(run, task) {
+  if (!run.readingWritingResponses) {
+    run.readingWritingResponses = {};
+  }
+  if (!run.readingWritingResponses[task.id]) {
+    run.readingWritingResponses[task.id] = {
+      taskId: task.id,
+      taskType: task.type,
+      answer: "",
+      blankAnswers: {},
+      submitted: false,
+      submittedAt: ""
+    };
+  }
+  return run.readingWritingResponses[task.id];
+}
+
+function composeFillBlankAnswer(task, response) {
+  const blanks = safeArray(task.blanks);
+  const values = blanks.map((blank) => response.blankAnswers?.[blank.id] || "");
+  if (!values.some(Boolean)) return "";
+
+  let cursor = 0;
+  const template = String(task.template || "");
+  const filled = template.replace(/_{2,}|（\s*）|\(\s*\)|\[blank\]/gi, () => {
+    const value = values[cursor] || "_____";
+    cursor += 1;
+    return value;
+  });
+
+  if (cursor > 0) {
+    return filled;
+  }
+
+  return blanks.map((blank, index) => `${blank.hintJa || blank.id || index + 1}: ${values[index] || "まだ入力されていません"}`).join("\n");
+}
+
+function worksheetUserAnswer(task, response) {
+  if (task.type === "fill_blank") {
+    return composeFillBlankAnswer(task, response);
+  }
+  if (task.type === "sentence_completion") {
+    return [task.starter || "", response.answer || ""].filter(Boolean).join("");
+  }
+  return response.answer || "";
+}
+
+function renderWorksheetComparison(task, response) {
+  if (!response.submitted) return "";
+  const userAnswer = worksheetUserAnswer(task, response) || "まだ入力されていません";
+  const modelAnswer = task.modelAnswer || "模範回答は未設定です。";
+  return `
+    <div class="reading-writing-comparison">
+      <div class="reading-writing-compare-grid">
+        <article class="reading-writing-compare-card">
+          <h6>あなたの回答</h6>
+          <p>${escapeHtml(userAnswer)}</p>
+        </article>
+        <article class="reading-writing-compare-card">
+          <h6>模範回答</h6>
+          <p>${escapeHtml(modelAnswer)}</p>
+          ${renderPinyin(task.modelAnswerPinyin)}
+        </article>
+      </div>
+      ${task.explanationJa ? `
+        <div class="reading-writing-point">
+          <strong>ポイント</strong>
+          <p>${escapeHtml(task.explanationJa)}</p>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderFillBlankTask(task, response) {
+  return `
+    ${task.template ? `<p class="reading-writing-template">${escapeHtml(task.template)}</p>` : ""}
+    ${renderPinyin(task.templatePinyin)}
+    <div class="reading-writing-blank-list">
+      ${safeArray(task.blanks).map((blank, index) => `
+        <label class="reading-writing-blank">
+          <span>${escapeHtml(blank.hintJa || `空所 ${index + 1}`)}</span>
+          ${blank.answerPinyin ? `<small class="pinyin">${escapeHtml(blank.answerPinyin)}</small>` : ""}
+          <input class="reading-writing-task-input" data-task-id="${escapeHtml(task.id)}" data-blank-id="${escapeHtml(blank.id)}" value="${escapeHtml(response.blankAnswers?.[blank.id] || "")}" placeholder="${escapeHtml(blank.answer || "")}" />
+        </label>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderWritingTextareaTask(task, response) {
+  const rows = task.type === "short_output" ? 5 : 3;
+  return `
+    ${task.starter ? `
+      <div class="reading-writing-starter">
+        <strong>${escapeHtml(task.starter)}</strong>
+        ${renderPinyin(task.starterPinyin)}
+      </div>
+    ` : ""}
+    ${task.hints?.length ? renderExpressionChips(task.hints) : ""}
+    ${task.requiredExpressions?.length ? renderExpressionChips(task.requiredExpressions) : ""}
+    <textarea class="reading-writing-task-input" data-task-id="${escapeHtml(task.id)}" rows="${rows}" placeholder="ここに入力してください">${escapeHtml(response.answer || "")}</textarea>
+  `;
+}
+
+function renderWorksheetTaskCard(task, run) {
+  const response = getReadingWritingResponse(run, task);
+  return `
+    <article class="reading-writing-worksheet-card">
+      <div class="reading-writing-worksheet-head">
+        <span>${escapeHtml(writingTaskTypeLabel(task.type))}</span>
+        <h5>${escapeHtml(task.title || writingTaskTypeLabel(task.type))}</h5>
+      </div>
+      ${task.instructionJa ? `<p class="muted">${escapeHtml(task.instructionJa)}</p>` : ""}
+      ${task.promptJa ? `<p>${escapeHtml(task.promptJa)}</p>` : ""}
+      ${task.type === "fill_blank" ? renderFillBlankTask(task, response) : renderWritingTextareaTask(task, response)}
+      <button type="button" class="soft-button reading-writing-submit" data-task-id="${escapeHtml(task.id)}">回答する</button>
+      ${renderWorksheetComparison(task, response)}
+    </article>
+  `;
 }
 
 function renderReadingWritingTaskStep(mat, run, stepInfo) {
   const task = normalizeReadingWritingTask(mat);
-  const hasWorksheet = task.requirements.length || task.keyVocabulary.length || task.grammarTips.length || task.structure.length || task.checklist.length;
+  const hasGuidance = task.requirements.length || task.keyVocabulary.length || task.grammarTips.length || task.structure.length || task.recommendedExpressions.length;
+  const hasWorksheetTasks = task.tasks.length > 0;
   const placeholder = task.taskType === "email"
     ? "本文の表現を使ってメールを書いてください..."
     : "本文の内容・表現を使って作文してください...";
-  const rows = hasWorksheet ? 8 : 4;
+  const rows = hasGuidance ? 8 : 4;
 
   return `
     <section class="section-card reading-writing-task">
@@ -4253,6 +4498,7 @@ function renderReadingWritingTaskStep(mat, run, stepInfo) {
             ${task.keyVocabulary.map((item) => `
               <div class="reading-writing-vocab">
                 <strong>${escapeHtml(item.term || "")}</strong>
+                ${renderPinyin(item.pinyin)}
                 <span>${escapeHtml(item.meaningJa || "")}</span>
                 ${item.noteJa ? `<small>${escapeHtml(item.noteJa)}</small>` : ""}
               </div>
@@ -4268,8 +4514,19 @@ function renderReadingWritingTaskStep(mat, run, stepInfo) {
               <article class="reading-writing-tip">
                 ${item.title ? `<strong>${escapeHtml(item.title)}</strong>` : ""}
                 ${item.pattern ? `<code>${escapeHtml(item.pattern)}</code>` : ""}
+                ${renderPinyin(item.pinyin)}
                 ${item.explanationJa ? `<p>${escapeHtml(item.explanationJa)}</p>` : ""}
-                ${item.examples.length ? `<p class="muted">${item.examples.map((example) => escapeHtml(String(example))).join(" / ")}</p>` : ""}
+                ${item.examples.length ? `
+                  <div class="reading-writing-example-list">
+                    ${item.examples.map((example) => `
+                      <p>
+                        ${example.text ? `<span>${escapeHtml(example.text)}</span>` : ""}
+                        ${example.pinyin ? `<small class="pinyin">${escapeHtml(example.pinyin)}</small>` : ""}
+                        ${example.meaningJa ? `<small class="muted">${escapeHtml(example.meaningJa)}</small>` : ""}
+                      </p>
+                    `).join("")}
+                  </div>
+                ` : ""}
               </article>
             `).join("")}
           </div>
@@ -4284,20 +4541,26 @@ function renderReadingWritingTaskStep(mat, run, stepInfo) {
       ${task.recommendedExpressions.length ? `
         <div class="reading-writing-panel">
           <h5>Useful Expressions</h5>
-          <div class="focus-chunks">${task.recommendedExpressions.map((e) => `<code>${escapeHtml(e)}</code>`).join("")}</div>
+          ${renderExpressionChips(task.recommendedExpressions)}
         </div>
       ` : ""}
     </section>
-    <label>
-      作文
-      <textarea id="course-reading-output" rows="${rows}" placeholder="${escapeHtml(placeholder)}">${escapeHtml(run.readingOutputText || "")}</textarea>
-    </label>
-    ${task.checklist.length ? `
-      <section class="section-card reading-writing-panel reading-writing-selfcheck">
-        <h5>Self-Check</h5>
-        <ul>${task.checklist.map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul>
+    ${hasWorksheetTasks ? `
+      <section class="reading-writing-worksheet">
+        ${task.tasks.map((worksheetTask) => renderWorksheetTaskCard(worksheetTask, run)).join("")}
       </section>
-    ` : ""}
+    ` : `
+      ${mat.writingTask || mat.readingWritingTask || mat.oneSentenceOutput ? `
+        <label>
+          作文
+          <textarea id="course-reading-output" rows="${rows}" placeholder="${escapeHtml(placeholder)}">${escapeHtml(run.readingOutputText || "")}</textarea>
+        </label>
+      ` : `
+        <section class="section-card reading-writing-panel">
+          <p class="muted">この教材には作文タスクがありません。</p>
+        </section>
+      `}
+    `}
   `;
 }
 
@@ -4453,6 +4716,46 @@ function renderReadingCourseStep(container) {
   });
 
   container.querySelector("#course-reading-output")?.addEventListener("input", syncCourseTextInputs);
+
+  container.querySelectorAll(".reading-writing-task-input").forEach((input) => {
+    input.addEventListener("input", () => {
+      const task = normalizeReadingWritingTask(mat).tasks.find((item) => item.id === input.dataset.taskId);
+      if (!task) return;
+      const response = getReadingWritingResponse(run, task);
+      if (input.dataset.blankId) {
+        response.blankAnswers = {
+          ...(response.blankAnswers || {}),
+          [input.dataset.blankId]: input.value
+        };
+      } else {
+        response.answer = input.value;
+      }
+      updateReadingWritingSummary(run);
+    });
+  });
+
+  container.querySelectorAll(".reading-writing-submit").forEach((button) => {
+    button.addEventListener("click", () => {
+      const task = normalizeReadingWritingTask(mat).tasks.find((item) => item.id === button.dataset.taskId);
+      if (!task) return;
+      const response = getReadingWritingResponse(run, task);
+      container.querySelectorAll(".reading-writing-task-input").forEach((input) => {
+        if (input.dataset.taskId !== task.id) return;
+        if (input.dataset.blankId) {
+          response.blankAnswers = {
+            ...(response.blankAnswers || {}),
+            [input.dataset.blankId]: input.value
+          };
+        } else {
+          response.answer = input.value;
+        }
+      });
+      response.submitted = true;
+      response.submittedAt = new Date().toISOString();
+      updateReadingWritingSummary(run);
+      renderReadingCourseStep(container);
+    });
+  });
 
   run.renderedStepIndex = run.currentStepIndex;
 }
@@ -4621,6 +4924,7 @@ function courseSessionPayload() {
     feedbackText: "",
     note: run.note,
     readingOutputText: run.readingOutputText,
+    readingWritingResponses: serializedReadingWritingResponses(run),
     readingMaterialTitle: run.readingMaterial?.title || "",
     listeningHeard: run.listeningHeard,
     listeningExpressions: run.listeningExpressions,
@@ -4648,7 +4952,12 @@ function renderCourseSummary() {
     <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
     ${payload.readingMaterialTitle ? `<article class="section-card"><h4>読解教材</h4><p>${escapeHtml(payload.readingMaterialTitle)}</p></article>` : ""}
     ${payload.readingOutputText ? `<article class="section-card"><h4>読解作文</h4><p>${escapeHtml(payload.readingOutputText)}</p></article>` : ""}
-    <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>
+    ${payload.readingWritingResponses?.length ? `
+      <article class="section-card">
+        <h4>読解作文ワークシート</h4>
+        <p>${escapeHtml(payload.readingWritingResponses.filter((item) => item.userAnswer).length)}件入力</p>
+      </article>
+    ` : ""}
     <article class="section-card"><h4>今日のメモ</h4><p>${escapeHtml(payload.note || "未入力")}</p></article>
     ${payload.listeningHeard || payload.listeningExpressions || payload.listeningDifficult ? `
     <article class="section-card">
@@ -4916,7 +5225,7 @@ function renderSessionHistoryTable() {
           <td>${escapeHtml(String(session.skippedSteps?.length || 0))}</td>
           <td>${escapeHtml(String(session.reviewedItemIds?.length || 0))}</td>
           <td>${escapeHtml(String(session.mistakeItemIds?.length || 0))}</td>
-          <td>${session.writingText ? "あり" : "なし"}</td>
+          <td>${session.readingWritingResponses?.length || session.readingOutputText ? "あり" : "なし"}</td>
           <td>${session.note ? "あり" : "なし"}</td>
           <td>
             <div class="table-actions">
@@ -5035,10 +5344,20 @@ async function renderSessionDetail(session) {
         <h4>読解作文</h4>
         <p>${escapeHtml(session.readingOutputText || "未入力")}</p>
       </article>
-      <article class="section-card">
-        <h4>作文</h4>
-        <p>${escapeHtml(session.writingText || "未入力")}</p>
-      </article>
+      ${safeArray(session.readingWritingResponses).length ? `
+        <article class="section-card">
+          <h4>読解作文ワークシート</h4>
+          <div class="reading-writing-history-list">
+            ${safeArray(session.readingWritingResponses).map((item) => `
+              <div>
+                <strong>${escapeHtml(item.taskType || item.taskId || "task")}</strong>
+                <p>${escapeHtml(item.userAnswer || "まだ入力されていません")}</p>
+                ${item.modelAnswer ? `<p class="muted">模範回答: ${escapeHtml(item.modelAnswer)}</p>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </article>
+      ` : ""}
       <article class="section-card">
         <h4>フィードバック</h4>
         <p>${escapeHtml(session.feedbackText || "なし")}</p>

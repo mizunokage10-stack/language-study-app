@@ -660,7 +660,7 @@
             <div class="option-head"><h3>LearningSession履歴</h3></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>日付</th><th>コース</th><th>予定</th><th>実績</th><th>完了</th><th>スキップ</th><th>復習</th><th>難しい</th><th>作文</th><th>メモ</th><th>操作</th></tr></thead>
+                <thead><tr><th>日付</th><th>コース</th><th>予定</th><th>実績</th><th>完了</th><th>スキップ</th><th>復習</th><th>難しい</th><th>読解作文</th><th>メモ</th><th>操作</th></tr></thead>
                 <tbody id="session-history-table-body"></tbody>
               </table>
             </div>
@@ -773,70 +773,75 @@
         // 読解プロンプトのコピー
         var READING_PROMPT_TEXT = `以下の文章を、言語学習アプリの読解パートに登録できる教材JSONに変換してください。
 
-目的は、文章をただ読むだけではなく、以下の5ステップで学習できるようにすることです。
+目的：
+本文を「読む → 確認する → 精読する → 再読する → 本文の表現を使って書く」流れで学習できる教材にすること。
 
-1. 初読
-2. 確認設問
-3. 精読・文法構文・語彙整理
-4. 再読
-5. 読解作文
+出力ルール：
+- 出力はJSONのみ。
+- 最初の文字は必ず { にする。
+- 最後の文字は必ず } にする。
+- Markdownコードブロックは禁止。
+- JSON外の説明文は禁止。
+- JSON.parseで読み込める厳密なJSONにする。
+- キー名と文字列は半角ダブルクォート " で囲む。
+- 文字列の中では半角ダブルクォート " を絶対に使わない。
+- 英語・中国語・フランス語などの語句を引用する場合は、必ず日本語の鍵括弧「」を使う。
+- スマートクォート “ ” ‘ ’ は使わない。
+- 末尾カンマは禁止。
+- 空欄の値は作らず、教材として使える内容を入れる。
 
-第5ステップの作文は、メール形式に固定しないでください。
-本文のジャンル・内容・学習目標に合わせて、要約、意見文、返信、説明文、描写、比較、短い発表原稿などから自然なタスクを選んでください。
-ワークシート型にするため、課題、要件、使う語彙、文法ヒント、構成の足場、自己チェックを入れてください。
+悪い例：
+"explanationJa": "本文の "prior art" は先行技術を意味します。"
 
-特に第3ステップ「精読・文法構文・語彙整理」では、語彙・チャンク・文法を別々のリストとして並べるのではなく、本文の順番に沿って、文または段落ごとに解説してください。
+良い例：
+"explanationJa": "本文の「prior art」は先行技術を意味します。"
 
-以下の条件に従って、必ずJSONのみを出力してください。
-説明文、前置き、Markdownのコードブロックは不要です。
+教材の5ステップ：
+1. firstReading：初読
+2. comprehensionQuestions：確認設問3問
+3. intensiveReading：本文順の精読
+4. rereading：再読
+5. writingTask：読解作文ワークシート
 
-【重要】
-出力は、JSON.parseでそのまま読み込める厳密なJSONだけにしてください。
-JSONのキー名と文字列は、必ず半角ダブルクォート " で囲んでください。
-スマートクォート “ ” や ‘ ’ は絶対に使わないでください。
-Markdownのコードブロック、説明文、前置き、末尾コメントは不要です。
+language：
+英語は "en"、中国語は "zh"、フランス語は "fr"。
+level：
+A1 / A2 / B1 / B2 / C1 / C2 から選ぶ。
 
-ただし、explanation、explanationJa、note、noteJa、instruction、instructionJa、whyThisFormJa、cognitiveNoteJa、teachingPointJa などの文字列の中で学習言語のフレーズを引用する場合は、半角ダブルクォート " ではなく、日本語の鍵括弧 「 」 を使ってください。
+intensiveReading の方針：
+- 語彙・チャンク・文法を別々の一覧にせず、本文の順番に沿って block に分ける。
+- 各 block には sourceText、sourceTextJaHint、focusItems、explanationJa、miniCheck を入れる。
+- focusItems は本文中の重要な語彙・チャンク・文法に限定する。
+- vocabulary は marker: "highlight"
+- chunk は marker: "underline"
+- grammar / syntax / nuance は marker: "badge"
+- 全文訳に頼らず、本文の順番で意味を取れる説明にする。
 
-中国語教材の場合は、重要語彙・例文・暗唱文に必要に応じて拼音を付けてください。
+intensiveReading には必ず以下も入れる：
+- precisionGrammar：重要構文を2〜4項目、深く解説する
+- patternExpansion：作文・発表に転用できる型を3〜5項目
+- bilingualSummary：学習言語の要約と日本語要約
+- memorization：暗唱ミニ段落
 
-【作成方針】
+中国語教材の場合：
+- 重要語彙、例文、暗唱文、作文ヒント、模範回答には必要に応じて pinyin を入れる。
+- memorizationParagraphPinyin も入れる。
+- 英語・フランス語教材では pinyin は空文字でよい。
 
-- 日本語の全文訳を中心にしないでください。
-- japaneseTranslation は短く入れてもよいですが、精読パートでは全文訳に頼らず、本文中の語彙・チャンク・文法を順番に理解できるようにしてください。
-- intensiveReading.blocks では、本文の順番に沿って解説してください。
-- 各ブロックには、必ず title を付けてください。
-- 各ブロックの sourceText には、解説対象となる本文の文または段落を入れてください。
-- focusItems には、本文中で注目すべき語彙・チャンク・文法・構文を入れてください。
-- 語彙は marker: "highlight"
-- チャンク・句型は marker: "underline"
-- 文法・構文は marker: "badge"
-- 作者の意図、ニュアンス、認知効果は explanationJa または precisionGrammar に書いてください。
+writingTask の方針：
+- taskType は必ず "worksheet"。
+- 自由作文だけにしない。
+- 本文で学んだ語彙・文法・構文を使って、次の4種類の task を必ず1つずつ入れる。
+  1. fill_blank：空所補充
+  2. sentence_completion：文補完
+  3. guided_writing：ヒント付き短文作文
+  4. short_output：短い作文
+- 各 task には必ず modelAnswer と explanationJa を入れる。
+- 学習者が何も書けずに止まらないように、template / starter / hints / requiredExpressions を具体的に入れる。
+- Self-Check / checklist / selfCheck は作らない。
+- メール形式は、本文内容から自然に必要な場合だけ使う。
 
-【精読パートで必ず入れる内容】
-
-1. 本文順の注釈ブロック
-本文の流れに沿って、重要な文・段落ごとに解説してください。
-
-2. Grammaire de précision｜精密文法・構文解説
-本文中の重要な文法・構文を深く説明してください。
-単なる文法説明ではなく、なぜこの言い方なのか、他の言い方とどう違うのか、作者の意図、認知的効果、読み手への印象まで説明してください。
-学習者が他者にも説明できるような理解を得られる説明にしてください。
-
-3. 句型扩展｜作文・発表に使える型
-本文に出てきた語彙・構文・表現を、作文やスピーキングで使える形に転用してください。
-各項目には pattern、usageJa、example、exampleJa を入れてください。
-
-4. Résumé bilingue｜二言語小結
-本文内容を、学習言語と日本語で短くまとめてください。
-全文訳ではなく、内容理解の整理として使える要約にしてください。
-
-5. À mémoriser｜暗唱ミニ段落
-本文の主要語彙・重要構文を自然に含む短い暗唱用段落を作ってください。
-主要語彙をすべて単語単体で覚えさせるのではなく、短い文章の中で覚えられるようにしてください。
-
-【JSON形式】
-
+出力するJSONの基本構造：
 {
   "type": "reading_text",
   "title": "",
@@ -847,22 +852,10 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
   "originalText": "",
   "japaneseTranslation": "",
   "firstReading": {
-    "targetSeconds": 0,
+    "targetSeconds": 90,
     "instruction": ""
   },
   "comprehensionQuestions": [
-    {
-      "question": "",
-      "choices": ["", "", ""],
-      "answer": "",
-      "explanation": ""
-    },
-    {
-      "question": "",
-      "choices": ["", "", ""],
-      "answer": "",
-      "explanation": ""
-    },
     {
       "question": "",
       "choices": ["", "", ""],
@@ -889,20 +882,6 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
             "partOfSpeech": "",
             "noteJa": "",
             "marker": "highlight"
-          },
-          {
-            "type": "chunk",
-            "text": "",
-            "pinyin": "",
-            "meaningJa": "",
-            "noteJa": "",
-            "marker": "underline"
-          },
-          {
-            "type": "grammar",
-            "text": "",
-            "explanationJa": "",
-            "marker": "badge"
           }
         ],
         "explanationJa": "",
@@ -925,11 +904,13 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
         "pattern": "",
         "usageJa": "",
         "example": "",
+        "examplePinyin": "",
         "exampleJa": ""
       }
     ],
     "bilingualSummary": {
       "summaryTargetLanguage": "",
+      "summaryTargetLanguagePinyin": "",
       "summaryJa": ""
     },
     "memorization": {
@@ -940,30 +921,122 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
     }
   },
   "rereading": {
-    "targetSeconds": 0,
+    "targetSeconds": 70,
     "instruction": ""
   },
   "writingTask": {
     "title": "",
-    "taskType": "short_response",
+    "taskType": "worksheet",
     "prompt": "",
     "instruction": "",
     "targetLength": "3-5文",
     "requirements": ["", ""],
     "keyVocabulary": [
-      { "term": "", "meaningJa": "", "noteJa": "" }
+      {
+        "term": "",
+        "pinyin": "",
+        "meaningJa": "",
+        "noteJa": ""
+      }
     ],
     "grammarTips": [
       {
         "title": "",
         "pattern": "",
+        "pinyin": "",
         "explanationJa": "",
-        "examples": ["", ""]
+        "examples": [
+          {
+            "text": "",
+            "pinyin": "",
+            "meaningJa": ""
+          }
+        ]
       }
     ],
     "structure": ["", ""],
-    "recommendedExpressions": ["", ""],
-    "checklist": ["", ""]
+    "recommendedExpressions": [
+      {
+        "text": "",
+        "pinyin": "",
+        "meaningJa": ""
+      }
+    ],
+    "tasks": [
+      {
+        "id": "fill-1",
+        "type": "fill_blank",
+        "title": "空所補充",
+        "instructionJa": "",
+        "promptJa": "",
+        "template": "",
+        "templatePinyin": "",
+        "blanks": [
+          {
+            "id": "blank-1",
+            "hintJa": "",
+            "answer": "",
+            "answerPinyin": ""
+          }
+        ],
+        "modelAnswer": "",
+        "modelAnswerPinyin": "",
+        "explanationJa": ""
+      },
+      {
+        "id": "complete-1",
+        "type": "sentence_completion",
+        "title": "文を完成させる",
+        "instructionJa": "",
+        "promptJa": "",
+        "starter": "",
+        "starterPinyin": "",
+        "hints": [
+          {
+            "text": "",
+            "pinyin": "",
+            "meaningJa": ""
+          }
+        ],
+        "modelAnswer": "",
+        "modelAnswerPinyin": "",
+        "explanationJa": ""
+      },
+      {
+        "id": "guided-1",
+        "type": "guided_writing",
+        "title": "ヒント付き短文作文",
+        "instructionJa": "",
+        "promptJa": "",
+        "hints": [
+          {
+            "text": "",
+            "pinyin": "",
+            "meaningJa": ""
+          }
+        ],
+        "modelAnswer": "",
+        "modelAnswerPinyin": "",
+        "explanationJa": ""
+      },
+      {
+        "id": "short-output-1",
+        "type": "short_output",
+        "title": "短い作文",
+        "instructionJa": "",
+        "promptJa": "",
+        "requiredExpressions": [
+          {
+            "text": "",
+            "pinyin": "",
+            "meaningJa": ""
+          }
+        ],
+        "modelAnswer": "",
+        "modelAnswerPinyin": "",
+        "explanationJa": ""
+      }
+    ]
   },
   "oneSentenceOutput": {
     "instruction": "",
@@ -971,51 +1044,12 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
   }
 }
 
-【language の指定】
-英語: "en"
-中国語: "zh"
-フランス語: "fr"
-その他の言語は必要に応じて ISO 639-1 の2文字コードを使ってください。
-
-【level の指定】
-CEFR レベルを使ってください。
-A1 / A2 / B1 / B2 / C1 / C2
-
-【blockType の候補】
-以下から適切なものを使ってください。
-
-- "vocabulary"
-- "chunk"
-- "grammar"
-- "syntax"
-- "nuance"
-- "rhetoric"
-- "culture"
-- "output"
-
-【focusItems.type の候補】
-以下から適切なものを使ってください。
-
-- "vocabulary"
-- "chunk"
-- "grammar"
-- "syntax"
-- "nuance"
-
-【marker の候補】
-以下から適切なものを使ってください。
-
-- "highlight"
-- "underline"
-- "badge"
-
-【注意】
-空欄のままにせず、必ず教材として使える内容を入れてください。
-ただし、原文に存在しない情報を過度に作らないでください。
-確認設問は本文理解に基づくものにしてください。
-暗唱ミニ段落は、本文の内容と主要語彙を反映した自然な文章にしてください。
-writingTask は読解内容を使って書かせるタスクにしてください。メール形式は、本文の内容から自然に必要な場合だけ使ってください。
-oneSentenceOutput は互換性用に短く入れてください。中心は writingTask です。
+最終チェック：
+- 出力前に、JSON内の文章に半角ダブルクォート " が紛れ込んでいないか確認する。
+- 引用は必ず「」に変える。
+- Self-Check / checklist / selfCheck は含めない。
+- writingTask.tasks に fill_blank、sentence_completion、guided_writing、short_output があることを確認する。
+- 出力はJSONだけにする。
 
 変換する文章：`;
         var copyReadingBtn = document.querySelector('#copy-reading-prompt');

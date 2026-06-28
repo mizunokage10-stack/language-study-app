@@ -103,6 +103,7 @@ export function sanitizeLearningSession(session, existing = null) {
     recordingCount: toNumber(session.recordingCount, 0),
     writingText: session.writingText || "",
     readingOutputText: session.readingOutputText || "",
+    readingWritingResponses: Array.isArray(session.readingWritingResponses) ? session.readingWritingResponses : [],
     feedbackText: session.feedbackText || "",
     note: session.note || ""
   };
