@@ -771,7 +771,225 @@
         });
 
         // 読解プロンプトのコピー
-        var READING_PROMPT_TEXT = "以下の文章を、言語学習アプリの読解パートに登録できる教材JSONに変換してください。\n\n目的は、文章をただ読むだけではなく、以下の5ステップで学習できるようにすることです。\n\n1. 初読  2. 確認設問  3. 精読・文法構文・語彙整理  4.再読  5. 1文アウトプット\n\n以下の条件に従って、必ずJSONのみを出力してください。説明文、前置き、Markdownのコードブロックは不要です。\n\n【重要】出力は、JSON.parseでそのまま読み込める厳密なJSONだけにしてください。\nJSONのキー名と文字列は、必ず半角ダブルクォート \" で囲んでください。\nスマートクォート “ ” や ‘ ’ は絶対に使わないでください。\nMarkdownのコードブロック、説明文、前置き、末尾コメントは不要です。\n\nただし、explanation・explanationJa・note・instruction などの文字列の中で英語フレーズを引用する場合は、半角ダブルクォート \" ではなく、日本語の鍵括弧 「 」 を使ってください。また中国語の場合ピン音を必ずつけてください\n\n例：\n正: \"explanation\": \"本文の冒頭で 「Outdoor drinking should be prohibited」 と述べており...\"\n誤: \"explanation\": \"本文の冒頭で \\\"Outdoor drinking should be prohibited\\\" と述べており...\"\n\n{\n  \"type\": \"reading_text\",\n  \"title\": \"\",\n  \"language\": \"en\",\n  \"level\": \"B2\",\n  \"domain\": \"\",\n  \"sourceNote\": \"ユーザー貼り付け教材\",\n  \"originalText\": \"\",\n  \"japaneseTranslation\": \"\",\n  \"firstReading\": { \"targetSeconds\": 0, \"instruction\": \"\" },\n  \"comprehensionQuestions\": [\n    { \"question\": \"\", \"choices\": [\"\", \"\", \"\"], \"answer\": \"\", \"explanation\": \"\" },\n    { \"question\": \"\", \"choices\": [\"\", \"\", \"\"], \"answer\": \"\", \"explanation\": \"\" },\n    { \"question\": \"\", \"choices\": [\"\", \"\", \"\"], \"answer\": \"\", \"explanation\": \"\" }\n  ],\n  \"intensiveReading\": {\n    \"vocabulary\": [{ \"word\": \"\", \"pinyin\": \"\", \"meaningJa\": \"\", \"partOfSpeech\": \"\", \"note\": \"\" }],\n    \"chunks\": [{ \"chunk\": \"\", \"meaningJa\": \"\", \"note\": \"\" }],\n    \"grammarPoints\": [{ \"title\": \"\", \"explanationJa\": \"\", \"example\": \"\" }],\n    \"notes\": [\"\"]\n  },\n  \"rereading\": { \"targetSeconds\": 0, \"instruction\": \"\" },\n  \"oneSentenceOutput\": { \"instruction\": \"\", \"recommendedExpressions\": [\"\", \"\"] }\n}\n\n※ language は英語なら \"en\"、中国語なら \"zh\" を使ってください。\n※ level は CEFR レベル（A1 / A2 / B1 / B2 / C1）を使ってください。\n\n変換する文章：";
+        var READING_PROMPT_TEXT = `以下の文章を、言語学習アプリの読解パートに登録できる教材JSONに変換してください。
+
+目的は、文章をただ読むだけではなく、以下の5ステップで学習できるようにすることです。
+
+1. 初読
+2. 確認設問
+3. 精読・文法構文・語彙整理
+4. 再読
+5. 1文アウトプット
+
+特に第3ステップ「精読・文法構文・語彙整理」では、語彙・チャンク・文法を別々のリストとして並べるのではなく、本文の順番に沿って、文または段落ごとに解説してください。
+
+以下の条件に従って、必ずJSONのみを出力してください。
+説明文、前置き、Markdownのコードブロックは不要です。
+
+【重要】
+出力は、JSON.parseでそのまま読み込める厳密なJSONだけにしてください。
+JSONのキー名と文字列は、必ず半角ダブルクォート " で囲んでください。
+スマートクォート “ ” や ‘ ’ は絶対に使わないでください。
+Markdownのコードブロック、説明文、前置き、末尾コメントは不要です。
+
+ただし、explanation、explanationJa、note、noteJa、instruction、instructionJa、whyThisFormJa、cognitiveNoteJa、teachingPointJa などの文字列の中で学習言語のフレーズを引用する場合は、半角ダブルクォート " ではなく、日本語の鍵括弧 「 」 を使ってください。
+
+中国語教材の場合は、重要語彙・例文・暗唱文に必要に応じて拼音を付けてください。
+
+【作成方針】
+
+- 日本語の全文訳を中心にしないでください。
+- japaneseTranslation は短く入れてもよいですが、精読パートでは全文訳に頼らず、本文中の語彙・チャンク・文法を順番に理解できるようにしてください。
+- intensiveReading.blocks では、本文の順番に沿って解説してください。
+- 各ブロックには、必ず title を付けてください。
+- 各ブロックの sourceText には、解説対象となる本文の文または段落を入れてください。
+- focusItems には、本文中で注目すべき語彙・チャンク・文法・構文を入れてください。
+- 語彙は marker: "highlight"
+- チャンク・句型は marker: "underline"
+- 文法・構文は marker: "badge"
+- 作者の意図、ニュアンス、認知効果は explanationJa または precisionGrammar に書いてください。
+
+【精読パートで必ず入れる内容】
+
+1. 本文順の注釈ブロック
+本文の流れに沿って、重要な文・段落ごとに解説してください。
+
+2. Grammaire de précision｜精密文法・構文解説
+本文中の重要な文法・構文を深く説明してください。
+単なる文法説明ではなく、なぜこの言い方なのか、他の言い方とどう違うのか、作者の意図、認知的効果、読み手への印象まで説明してください。
+学習者が他者にも説明できるような理解を得られる説明にしてください。
+
+3. 句型扩展｜作文・発表に使える型
+本文に出てきた語彙・構文・表現を、作文やスピーキングで使える形に転用してください。
+各項目には pattern、usageJa、example、exampleJa を入れてください。
+
+4. Résumé bilingue｜二言語小結
+本文内容を、学習言語と日本語で短くまとめてください。
+全文訳ではなく、内容理解の整理として使える要約にしてください。
+
+5. À mémoriser｜暗唱ミニ段落
+本文の主要語彙・重要構文を自然に含む短い暗唱用段落を作ってください。
+主要語彙をすべて単語単体で覚えさせるのではなく、短い文章の中で覚えられるようにしてください。
+
+【JSON形式】
+
+{
+  "type": "reading_text",
+  "title": "",
+  "language": "en",
+  "level": "B2",
+  "domain": "",
+  "sourceNote": "ユーザー貼り付け教材",
+  "originalText": "",
+  "japaneseTranslation": "",
+  "firstReading": {
+    "targetSeconds": 0,
+    "instruction": ""
+  },
+  "comprehensionQuestions": [
+    {
+      "question": "",
+      "choices": ["", "", ""],
+      "answer": "",
+      "explanation": ""
+    },
+    {
+      "question": "",
+      "choices": ["", "", ""],
+      "answer": "",
+      "explanation": ""
+    },
+    {
+      "question": "",
+      "choices": ["", "", ""],
+      "answer": "",
+      "explanation": ""
+    }
+  ],
+  "intensiveReading": {
+    "layout": "annotated_sequence",
+    "guide": "本文の順番に沿って、語彙・チャンク・文法を確認します。全文訳に頼らず、本文の中で意味を取る練習をします。",
+    "blocks": [
+      {
+        "id": "block-1",
+        "title": "",
+        "blockType": "grammar",
+        "sourceText": "",
+        "sourceTextJaHint": "",
+        "focusItems": [
+          {
+            "type": "vocabulary",
+            "text": "",
+            "pinyin": "",
+            "meaningJa": "",
+            "partOfSpeech": "",
+            "noteJa": "",
+            "marker": "highlight"
+          },
+          {
+            "type": "chunk",
+            "text": "",
+            "pinyin": "",
+            "meaningJa": "",
+            "noteJa": "",
+            "marker": "underline"
+          },
+          {
+            "type": "grammar",
+            "text": "",
+            "explanationJa": "",
+            "marker": "badge"
+          }
+        ],
+        "explanationJa": "",
+        "miniCheck": ""
+      }
+    ],
+    "precisionGrammar": [
+      {
+        "title": "",
+        "sourceExpression": "",
+        "explanationJa": "",
+        "whyThisFormJa": "",
+        "alternativeExpression": "",
+        "cognitiveNoteJa": "",
+        "teachingPointJa": ""
+      }
+    ],
+    "patternExpansion": [
+      {
+        "pattern": "",
+        "usageJa": "",
+        "example": "",
+        "exampleJa": ""
+      }
+    ],
+    "bilingualSummary": {
+      "summaryTargetLanguage": "",
+      "summaryJa": ""
+    },
+    "memorization": {
+      "memorizationParagraph": "",
+      "memorizationParagraphPinyin": "",
+      "memoryCues": ["", ""],
+      "instructionJa": ""
+    }
+  },
+  "rereading": {
+    "targetSeconds": 0,
+    "instruction": ""
+  },
+  "oneSentenceOutput": {
+    "instruction": "",
+    "recommendedExpressions": ["", ""]
+  }
+}
+
+【language の指定】
+英語: "en"
+中国語: "zh"
+フランス語: "fr"
+その他の言語は必要に応じて ISO 639-1 の2文字コードを使ってください。
+
+【level の指定】
+CEFR レベルを使ってください。
+A1 / A2 / B1 / B2 / C1 / C2
+
+【blockType の候補】
+以下から適切なものを使ってください。
+
+- "vocabulary"
+- "chunk"
+- "grammar"
+- "syntax"
+- "nuance"
+- "rhetoric"
+- "culture"
+- "output"
+
+【focusItems.type の候補】
+以下から適切なものを使ってください。
+
+- "vocabulary"
+- "chunk"
+- "grammar"
+- "syntax"
+- "nuance"
+
+【marker の候補】
+以下から適切なものを使ってください。
+
+- "highlight"
+- "underline"
+- "badge"
+
+【注意】
+空欄のままにせず、必ず教材として使える内容を入れてください。
+ただし、原文に存在しない情報を過度に作らないでください。
+確認設問は本文理解に基づくものにしてください。
+暗唱ミニ段落は、本文の内容と主要語彙を反映した自然な文章にしてください。
+
+変換する文章：`;
         var copyReadingBtn = document.querySelector('#copy-reading-prompt');
         function copyTextToClipboard(text) {
           if (navigator.clipboard && window.isSecureContext) {
