@@ -218,7 +218,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-30"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-30"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-30"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-30"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
@@ -230,7 +230,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-60"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-60"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-60"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-60"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
@@ -242,7 +242,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",       type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-90"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。" },
       { id: "listening", title: "リスニング",     type: "listening",  minutes: COURSE_PART_MINUTES["course-90"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。" },
-      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",           type: "reading",    minutes: COURSE_PART_MINUTES["course-90"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
       { id: "writing",   title: "作文",           type: "writing",    minutes: COURSE_PART_MINUTES["course-90"].writing,   instructions: "今日学んだ単語・表現を使って短い作文を書きます。" }
     ]
   },
@@ -254,7 +254,7 @@ const coursePresets = [
     steps: [
       { id: "vocab",     title: "単語学習",         type: "vocab-quiz", minutes: COURSE_PART_MINUTES["course-120"].vocab,     instructions: "登録済みの単語から意味入力・スペル入力の2形式で練習します。SRS優先順位の高い単語を重点的に練習します。" },
       { id: "listening", title: "リスニング",       type: "listening",  minutes: COURSE_PART_MINUTES["course-120"].listening, instructions: "VOA Learning Englishでリスニング練習を行います。音声の速度を変えながら複数回聞きましょう。" },
-      { id: "reading",   title: "読解",             type: "reading",    minutes: COURSE_PART_MINUTES["course-120"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→1文アウトプットの順で学習します。" },
+      { id: "reading",   title: "読解",             type: "reading",    minutes: COURSE_PART_MINUTES["course-120"].reading,   instructions: "登録した文章を使って、初読→確認設問→精読・文法構文・語彙整理→再読→読解作文の順で学習します。" },
       { id: "writing",   title: "作文・アウトプット", type: "writing",    minutes: COURSE_PART_MINUTES["course-120"].writing,   instructions: "今日学んだ単語・表現を使って、段落レベルの文章を書きます。文法・語彙・構造を意識して書いてください。" }
     ]
   }
@@ -619,6 +619,7 @@ async function handleSupabaseReadingMaterials(url, options = {}) {
       rereading: body.rereading || { targetSeconds: 60, instruction: "初読より少し速く読むことを目標にしてください。" },
       oralPractice: body.oralPractice || { instruction: "", focusChunks: [] },
       oneSentenceOutput: body.oneSentenceOutput || { instruction: "", recommendedExpressions: [] },
+      writingTask: body.writingTask || body.readingWritingTask || null,
       completed: Boolean(body.completed),
       createdAt: body.createdAt || timestamp,
       updatedAt: timestamp
@@ -708,8 +709,7 @@ function validateReadingMaterialPayload(payload) {
     "firstReading",
     "comprehensionQuestions",
     "intensiveReading",
-    "rereading",
-    "oneSentenceOutput"
+    "rereading"
   ];
   const supportedLanguages = ["en", "english", "zh", "chinese", "fr", "french"];
   const hasReadableText = Boolean(payload?.originalText || payload?.text || payload?.content || payload?.readingText);
@@ -1898,6 +1898,10 @@ async function fetchJson(url, options = {}) {
     return handleSupabaseReadingMaterials(url, options);
   }
 
+  if (parsedUrl.pathname.startsWith("/api/reading-materials")) {
+    return handleLocalJson(url, options);
+  }
+
   if (shouldUseLocalStorageBackend()) {
     return handleLocalJson(url, options);
   }
@@ -2258,6 +2262,7 @@ async function handleLocalJson(url, options = {}) {
       dictationCount: Number(body.dictationCount || 0),
       recordingCount: Number(body.recordingCount || 0),
       writingText: body.writingText || "",
+      readingOutputText: body.readingOutputText || "",
       feedbackText: body.feedbackText || "",
       note: body.note || "",
       createdAt: timestamp,
@@ -2415,6 +2420,7 @@ async function handleLocalJson(url, options = {}) {
       rereading: body.rereading || { targetSeconds: 60, instruction: "初読より少し速く読むことを目標にしてください。" },
       oralPractice: body.oralPractice || { instruction: "", focusChunks: [] },
       oneSentenceOutput: body.oneSentenceOutput || { instruction: "", recommendedExpressions: [] },
+      writingTask: body.writingTask || body.readingWritingTask || null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -4171,12 +4177,136 @@ function renderReadingMaterialSelector(container) {
   run.renderedStepIndex = run.currentStepIndex;
 }
 
+function normalizeReadingWritingTask(mat) {
+  const legacy = mat.oneSentenceOutput || {};
+  const task = mat.writingTask || mat.readingWritingTask || {};
+  const hasStructuredTask = Boolean(mat.writingTask || mat.readingWritingTask);
+  const recommendedExpressions = safeArray(task.recommendedExpressions || legacy.recommendedExpressions);
+  const keyVocabulary = safeArray(task.keyVocabulary || task.vocabulary).map((item) => {
+    if (typeof item === "string") {
+      return { term: item, meaningJa: "" };
+    }
+    return {
+      term: item.term || item.word || item.expression || item.text || "",
+      meaningJa: item.meaningJa || item.meaning || item.translationJa || item.translation || "",
+      noteJa: item.noteJa || item.note || ""
+    };
+  }).filter((item) => item.term || item.meaningJa);
+
+  return {
+    title: task.title || legacy.title || "読解作文",
+    taskType: task.taskType || task.genre || "short_response",
+    prompt: task.prompt || task.instruction || legacy.instruction || "本文で使われていた表現を選び、自分の生活や考えに置き換えて書いてください。",
+    instruction: task.instruction || (hasStructuredTask ? "" : legacy.instruction || ""),
+    targetLength: task.targetLength || task.lengthGuide || "3-5文",
+    requirements: safeArray(task.requirements),
+    keyVocabulary,
+    grammarTips: safeArray(task.grammarTips || task.grammarHints).map((item) => {
+      if (typeof item === "string") {
+        return { title: item, explanationJa: "" };
+      }
+      return {
+        title: item.title || item.name || item.pattern || "",
+        pattern: item.pattern || item.sourceExpression || "",
+        explanationJa: item.explanationJa || item.usageJa || item.noteJa || item.explanation || "",
+        examples: safeArray(item.examples || (item.example ? [item.example] : []))
+      };
+    }).filter((item) => item.title || item.pattern || item.explanationJa || item.examples.length),
+    structure: safeArray(task.structure || task.sections),
+    recommendedExpressions,
+    checklist: safeArray(task.checklist || task.selfCheck)
+  };
+}
+
+function renderReadingWritingTaskStep(mat, run, stepInfo) {
+  const task = normalizeReadingWritingTask(mat);
+  const hasWorksheet = task.requirements.length || task.keyVocabulary.length || task.grammarTips.length || task.structure.length || task.checklist.length;
+  const placeholder = task.taskType === "email"
+    ? "本文の表現を使ってメールを書いてください..."
+    : "本文の内容・表現を使って作文してください...";
+  const rows = hasWorksheet ? 8 : 4;
+
+  return `
+    <section class="section-card reading-writing-task">
+      <div class="reading-writing-head">
+        <div>
+          <h4>${escapeHtml(stepInfo.label)}</h4>
+          <p class="muted">${escapeHtml(task.title)} / ${escapeHtml(task.targetLength)}</p>
+        </div>
+        <span class="reading-writing-type">${escapeHtml(task.taskType)}</span>
+      </div>
+      <div class="reading-writing-prompt">
+        <strong>Task</strong>
+        <p>${escapeHtml(task.prompt)}</p>
+        ${task.instruction && task.instruction !== task.prompt ? `<p class="muted">${escapeHtml(task.instruction)}</p>` : ""}
+      </div>
+      ${task.requirements.length ? `
+        <div class="reading-writing-panel reading-writing-panel--requirements">
+          <h5>Requirements</h5>
+          <ul>${task.requirements.map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul>
+        </div>
+      ` : ""}
+      ${task.keyVocabulary.length ? `
+        <div class="reading-writing-panel">
+          <h5>Key Vocabulary</h5>
+          <div class="reading-writing-vocab-grid">
+            ${task.keyVocabulary.map((item) => `
+              <div class="reading-writing-vocab">
+                <strong>${escapeHtml(item.term || "")}</strong>
+                <span>${escapeHtml(item.meaningJa || "")}</span>
+                ${item.noteJa ? `<small>${escapeHtml(item.noteJa)}</small>` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
+      ${task.grammarTips.length ? `
+        <div class="reading-writing-panel">
+          <h5>Grammar Tips</h5>
+          <div class="reading-writing-tip-grid">
+            ${task.grammarTips.map((item) => `
+              <article class="reading-writing-tip">
+                ${item.title ? `<strong>${escapeHtml(item.title)}</strong>` : ""}
+                ${item.pattern ? `<code>${escapeHtml(item.pattern)}</code>` : ""}
+                ${item.explanationJa ? `<p>${escapeHtml(item.explanationJa)}</p>` : ""}
+                ${item.examples.length ? `<p class="muted">${item.examples.map((example) => escapeHtml(String(example))).join(" / ")}</p>` : ""}
+              </article>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
+      ${task.structure.length ? `
+        <div class="reading-writing-panel">
+          <h5>Structure</h5>
+          <ol>${task.structure.map((item) => `<li>${escapeHtml(typeof item === "string" ? item : `${item.label || item.title || ""}${item.guidance ? `: ${item.guidance}` : ""}`)}</li>`).join("")}</ol>
+        </div>
+      ` : ""}
+      ${task.recommendedExpressions.length ? `
+        <div class="reading-writing-panel">
+          <h5>Useful Expressions</h5>
+          <div class="focus-chunks">${task.recommendedExpressions.map((e) => `<code>${escapeHtml(e)}</code>`).join("")}</div>
+        </div>
+      ` : ""}
+    </section>
+    <label>
+      作文
+      <textarea id="course-reading-output" rows="${rows}" placeholder="${escapeHtml(placeholder)}">${escapeHtml(run.readingOutputText || "")}</textarea>
+    </label>
+    ${task.checklist.length ? `
+      <section class="section-card reading-writing-panel reading-writing-selfcheck">
+        <h5>Self-Check</h5>
+        <ul>${task.checklist.map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul>
+      </section>
+    ` : ""}
+  `;
+}
+
 const READING_SUB_STEPS = [
   { key: "firstReading",       label: "① 初読",                       description: "辞書を使わず、止まらずに読みましょう。完璧に理解しようとせず、全体の流れを掴むことを目標にしましょう。" },
   { key: "comprehension",      label: "② 確認設問",                   description: "初読でどれくらい意味を掴めたか確認します。" },
   { key: "intensiveReading",   label: "③ 精読・文法構文・語彙整理",   description: "語彙・文法・構文を丁寧に確認します。ここでは止まって確認してください。" },
   { key: "rereading",          label: "④ 再読",                       description: "今度は初読より少し速く読むことを目標にしましょう。意味をかたまりで処理することを意識してください。" },
-  { key: "oneSentenceOutput",  label: "⑤ 1文アウトプット",            description: "本文で使われていた表現を1つ選び、自分の生活や考えに置き換えて1文書いてください。" }
+  { key: "readingWriting",     label: "⑤ 読解作文",                   description: "本文で理解した内容・語彙・構文を使って、短い作文に転用してください。" }
 ];
 
 function renderReadingCourseStep(container) {
@@ -4284,26 +4414,10 @@ function renderReadingCourseStep(container) {
         <h4>本文</h4>
         <pre class="reading-text">${escapeHtml(bodyText || "")}</pre>
       </section>
-      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 1文アウトプットへ</button></div>
+      <div class="mini-actions"><button type="button" id="reading-substep-next" class="soft-button">読み終えた → 読解作文へ</button></div>
     `;
   } else if (subStep === 4) {
-    const out = mat.oneSentenceOutput || {};
-    const inst = out.instruction || mat.outputPrompt || stepInfo.description;
-    const exprs = safeArray(out.recommendedExpressions);
-    content = `
-      <section class="section-card">
-        <h4>${stepInfo.label}</h4>
-        <p>${escapeHtml(inst)}</p>
-        ${exprs.length ? `
-          <p class="muted">使える表現：</p>
-          <div class="focus-chunks">${exprs.map((e) => `<code>${escapeHtml(e)}</code>`).join("")}</div>
-        ` : ""}
-      </section>
-      <label>
-        1文アウトプット
-        <textarea id="course-reading-output" rows="4" placeholder="本文の表現を使って1文書いてください...">${escapeHtml(run.readingOutputText || "")}</textarea>
-      </label>
-    `;
+    content = renderReadingWritingTaskStep(mat, run, stepInfo);
   }
 
   container.innerHTML = `
@@ -4533,7 +4647,7 @@ function renderCourseSummary() {
     </div>
     <article class="section-card"><h4>スキップしたステップ</h4><p>${escapeHtml(payload.skippedSteps.join(", ") || "なし")}</p></article>
     ${payload.readingMaterialTitle ? `<article class="section-card"><h4>読解教材</h4><p>${escapeHtml(payload.readingMaterialTitle)}</p></article>` : ""}
-    ${payload.readingOutputText ? `<article class="section-card"><h4>1文アウトプット</h4><p>${escapeHtml(payload.readingOutputText)}</p></article>` : ""}
+    ${payload.readingOutputText ? `<article class="section-card"><h4>読解作文</h4><p>${escapeHtml(payload.readingOutputText)}</p></article>` : ""}
     <article class="section-card"><h4>作文内容</h4><p>${escapeHtml(payload.writingText || "未入力")}</p></article>
     <article class="section-card"><h4>今日のメモ</h4><p>${escapeHtml(payload.note || "未入力")}</p></article>
     ${payload.listeningHeard || payload.listeningExpressions || payload.listeningDifficult ? `
@@ -4916,6 +5030,10 @@ async function renderSessionDetail(session) {
       <article class="section-card">
         <h4>カウント</h4>
         <p>dictationCount: ${escapeHtml(String(session.dictationCount || 0))} / recordingCount: ${escapeHtml(String(session.recordingCount || 0))}</p>
+      </article>
+      <article class="section-card">
+        <h4>読解作文</h4>
+        <p>${escapeHtml(session.readingOutputText || "未入力")}</p>
       </article>
       <article class="section-card">
         <h4>作文</h4>

@@ -779,7 +779,11 @@
 2. 確認設問
 3. 精読・文法構文・語彙整理
 4. 再読
-5. 1文アウトプット
+5. 読解作文
+
+第5ステップの作文は、メール形式に固定しないでください。
+本文のジャンル・内容・学習目標に合わせて、要約、意見文、返信、説明文、描写、比較、短い発表原稿などから自然なタスクを選んでください。
+ワークシート型にするため、課題、要件、使う語彙、文法ヒント、構成の足場、自己チェックを入れてください。
 
 特に第3ステップ「精読・文法構文・語彙整理」では、語彙・チャンク・文法を別々のリストとして並べるのではなく、本文の順番に沿って、文または段落ごとに解説してください。
 
@@ -939,6 +943,28 @@ Markdownのコードブロック、説明文、前置き、末尾コメントは
     "targetSeconds": 0,
     "instruction": ""
   },
+  "writingTask": {
+    "title": "",
+    "taskType": "short_response",
+    "prompt": "",
+    "instruction": "",
+    "targetLength": "3-5文",
+    "requirements": ["", ""],
+    "keyVocabulary": [
+      { "term": "", "meaningJa": "", "noteJa": "" }
+    ],
+    "grammarTips": [
+      {
+        "title": "",
+        "pattern": "",
+        "explanationJa": "",
+        "examples": ["", ""]
+      }
+    ],
+    "structure": ["", ""],
+    "recommendedExpressions": ["", ""],
+    "checklist": ["", ""]
+  },
   "oneSentenceOutput": {
     "instruction": "",
     "recommendedExpressions": ["", ""]
@@ -988,6 +1014,8 @@ A1 / A2 / B1 / B2 / C1 / C2
 ただし、原文に存在しない情報を過度に作らないでください。
 確認設問は本文理解に基づくものにしてください。
 暗唱ミニ段落は、本文の内容と主要語彙を反映した自然な文章にしてください。
+writingTask は読解内容を使って書かせるタスクにしてください。メール形式は、本文の内容から自然に必要な場合だけ使ってください。
+oneSentenceOutput は互換性用に短く入れてください。中心は writingTask です。
 
 変換する文章：`;
         var copyReadingBtn = document.querySelector('#copy-reading-prompt');
