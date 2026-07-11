@@ -3746,6 +3746,33 @@ function focusItemMarkerClass(item = {}) {
   return "annotated-marker--vocabulary";
 }
 
+function readingBlockTranslation(block = {}) {
+  return firstPresentValue(block, [
+    "sourceTextJaHint",
+    "sourceTextJa",
+    "sourceTranslationJa",
+    "japaneseTranslation",
+    "translationJa"
+  ]);
+}
+
+function readingBlockPinyin(block = {}) {
+  return firstPresentValue(block, [
+    "sourceTextPinyin",
+    "sourcePinyin",
+    "textPinyin",
+    "sentencePinyin",
+    "paragraphPinyin",
+    "pinyin"
+  ]);
+}
+
+function renderReadingBlockTranslation(value) {
+  return value
+    ? `<p class="reading-source-translation">${escapeHtml(value)}</p>`
+    : "";
+}
+
 function renderAnnotatedText(sourceText = "", focusItems = []) {
   const source = String(sourceText || "");
   if (!source) {
@@ -3960,6 +3987,8 @@ function renderIntensiveReadingStep(mat, bodyText, stepInfo) {
         ${blocks.map((block, index) => {
           const focusItems = safeArray(block.focusItems);
           const sourceText = block.sourceText || block.text || block.sentence || bodyText;
+          const sourcePinyin = readingBlockPinyin(block);
+          const sourceTranslation = readingBlockTranslation(block);
           return `
             <section class="section-card reading-annotation-block">
               <div class="reading-block-head">
@@ -3971,7 +4000,8 @@ function renderIntensiveReadingStep(mat, bodyText, stepInfo) {
                 <div>
                   <p class="eyebrow">Texte annoté</p>
                   ${renderAnnotatedText(sourceText, focusItems)}
-                  ${renderPinyin(block.sourceTextPinyin || block.pinyin, "reading-pinyin")}
+                  ${renderPinyin(sourcePinyin, "reading-pinyin reading-source-pinyin")}
+                  ${renderReadingBlockTranslation(sourceTranslation)}
                 </div>
                 <div>
                   <p class="eyebrow">Grammaire + lexique + intentions</p>

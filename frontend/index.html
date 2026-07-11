@@ -810,7 +810,7 @@ A1 / A2 / B1 / B2 / C1 / C2 から選ぶ。
 
 intensiveReading の方針：
 - 語彙・チャンク・文法を別々の一覧にせず、本文の順番に沿って block に分ける。
-- 各 block には sourceText、sourceTextJaHint、focusItems、explanationJa、miniCheck を入れる。
+- 各 block には sourceText、sourceTextPinyin、sourceTextJaHint、focusItems、explanationJa、miniCheck を入れる。
 - focusItems は本文中の重要な語彙・チャンク・文法に限定する。
 - vocabulary は marker: "highlight"
 - chunk は marker: "underline"
@@ -824,6 +824,8 @@ intensiveReading には必ず以下も入れる：
 - memorization：暗唱ミニ段落
 
 中国語教材の場合：
+- 各 block の sourceTextPinyin には、sourceText 全体の拼音を声調記号付きで必ず入れる。
+- 各 block の sourceTextJaHint には、sourceText 全体の自然な日本語訳を必ず入れる。
 - 重要語彙、例文、暗唱文、作文ヒント、模範回答には必要に応じて pinyin を入れる。
 - memorizationParagraphPinyin も入れる。
 - 英語・フランス語教材では pinyin は空文字でよい。
@@ -872,6 +874,7 @@ writingTask の方針：
         "title": "",
         "blockType": "grammar",
         "sourceText": "",
+        "sourceTextPinyin": "",
         "sourceTextJaHint": "",
         "focusItems": [
           {
